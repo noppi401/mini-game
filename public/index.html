@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ミニゲーム集</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <section id="view-lobby" class="view">
+    <h1>ミニゲーム集</h1>
+    <p class="sub">このURLを共有すれば、リンクを知っている人が参加できます(最大4人)</p>
+
+    <div id="join-box">
+      <input id="name-input" type="text" maxlength="16" placeholder="ニックネーム" />
+      <button id="join-btn">参加する</button>
+    </div>
+
+    <div id="player-list-box" style="display:none;">
+      <h2>参加者 (<span id="player-count">0</span>/4)</h2>
+      <ul id="player-list"></ul>
+      <button id="start-btn" style="display:none;">ゲーム開始</button>
+      <p id="wait-msg" class="sub">ホストの開始を待っています…</p>
+    </div>
+
+    <p id="error-msg" class="error"></p>
+  </section>
+
+  <section id="view-game1" class="view">
+    <h1>ミニゲーム1:タンクバトル</h1>
+    <div id="g1-hud"></div>
+    <canvas id="g1-canvas" width="520" height="520"></canvas>
+    <p class="sub">矢印キー:移動 / SHIFT:ボム設置 / SPACE:発射</p>
+  </section>
+
+  <section id="view-result1" class="view">
+    <h1>ミニゲーム1 結果</h1>
+    <ol id="result1-list" class="result-list"></ol>
+    <h2>総合ポイント</h2>
+    <ol id="result1-totals" class="result-list"></ol>
+    <button id="next1-btn" style="display:none;">次のゲームへ</button>
+    <p id="next1-wait" class="sub">ホストの操作を待っています…</p>
+  </section>
+
+  <section id="view-game2" class="view">
+    <h1>ミニゲーム2:スロットカーレース</h1>
+    <div id="g2-hud"></div>
+    <canvas id="g2-canvas" width="560" height="360"></canvas>
+    <p class="sub">SHIFTを押す:加速 / 離す:減速(コーナーで速すぎるとスピンアウト)</p>
+  </section>
+
+  <section id="view-result2" class="view">
+    <h1>ミニゲーム2 結果</h1>
+    <ol id="result2-list" class="result-list"></ol>
+    <h2>総合ポイント</h2>
+    <ol id="result2-totals" class="result-list"></ol>
+    <button id="next2-btn" style="display:none;">最終結果へ</button>
+    <p id="next2-wait" class="sub">ホストの操作を待っています…</p>
+  </section>
+
+  <section id="view-final" class="view">
+    <h1>最終結果</h1>
+    <ol id="final-list" class="result-list"></ol>
+    <button id="restart-btn" style="display:none;">もう一度遊ぶ</button>
+    <p id="restart-wait" class="sub">ホストの操作を待っています…</p>
+  </section>
+
+</div>
+<script src="js/main.js"></script>
+</body>
+</html>

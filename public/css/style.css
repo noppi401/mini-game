@@ -1,0 +1,53 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  background: #1b1f2a;
+  color: #eef0f5;
+  display: flex;
+  justify-content: center;
+}
+#app {
+  width: 100%;
+  max-width: 640px;
+  padding: 24px 16px 60px;
+}
+h1 { font-size: 22px; margin-bottom: 4px; }
+h2 { font-size: 16px; margin: 18px 0 6px; color: #9aa4c0; }
+.sub { color: #9aa4c0; font-size: 13px; }
+.view { display: none; }
+.view.active { display: block; }
+
+#join-box { display: flex; gap: 8px; margin: 16px 0; }
+#name-input {
+  flex: 1; padding: 10px 12px; border-radius: 8px; border: none;
+  background: #2a2f3f; color: #fff; font-size: 15px;
+}
+button {
+  padding: 10px 16px; border-radius: 8px; border: none;
+  background: #4f7cff; color: #fff; font-size: 15px; cursor: pointer;
+}
+button:hover { background: #6a8fff; }
+button:disabled { background: #3a3f52; cursor: not-allowed; }
+
+#player-list { list-style: none; padding: 0; margin: 8px 0; }
+#player-list li {
+  padding: 8px 10px; margin-bottom: 6px; background: #262b3a; border-radius: 8px;
+  display: flex; justify-content: space-between;
+}
+.host-tag { color: #ffd166; font-size: 12px; }
+.error { color: #ff6b6b; min-height: 20px; }
+
+canvas {
+  width: 100%; max-width: 520px; background: #0f1220; border-radius: 8px;
+  display: block; margin: 12px auto; touch-action: none;
+}
+#g1-hud, #g2-hud {
+  display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; margin-top: 8px;
+}
+.hud-chip {
+  background: #262b3a; padding: 4px 10px; border-radius: 999px;
+}
+
+.result-list { padding-left: 20px; }
+.result-list li { margin-bottom: 6px; }
