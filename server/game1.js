@@ -18,9 +18,11 @@ const MAX_BOMB_CAPACITY = 5;
 const BASE_BOMB_RANGE = 1;
 const MAX_BOMB_RANGE = 4;
 const BOMB_FUSE = 2.0; // sec
-const BULLET_SPEED = 8; // tiles/sec
+const BULLET_SPEED = 5; // tiles/sec
 const BULLET_LIFE = 1.2; // sec
+const FIRE_COOLDOWN = 0.5; // sec between shots (limits rapid mashing)
 const HIT_INVULN = 1.0; // sec
+const EXPLOSION_DURATION = 0.45; // sec the blast flames stay visible
 const SHRINK_START = 45; // sec after round start
 const SHRINK_INTERVAL = 9; // sec per ring
 const PLAYER_RADIUS = 0.32; // tile units
@@ -94,12 +96,14 @@ class Game1 {
         input: { up: false, down: false, left: false, right: false, shift: false, space: false },
         prevShift: false,
         prevSpace: false,
+        fireCooldown: 0,
         eliminatedOrder: null,
       };
     });
 
     this.bombs = []; // {id,r,c,timer,ownerId,range}
     this.bullets = []; // {id,x,y,dx,dy,life,ownerId}
+    this.explosions = []; // {cells:[{r,c}], timer}
     this.powerups = {}; // "r,c" -> type
     this._nextId = 1;
   }
@@ -135,11 +139,13 @@ class Game1 {
     const ny = p.y + dy * speed * dt;
 
     // axis-separated collision for smoother sliding along walls
-    if (this._canStandAt(nx, p.y)) p.x = nx;
-    if (this._canStandAt(p.x, ny)) p.y = ny;
+    if (this._canStandAt(nx, p.y, p.id)) p.x = nx;
+    if (this._canStandAt(p.x, ny, p.id)) p.y = ny;
   }
 
-  _canStandAt(x, y) {
+  // A player may pass through a bomb they just dropped (they are standing on it)
+  // until they have fully stepped off; after that the bomb blocks them again.
+  _canStandAt(x, y, selfId) {
     const r0 = Math.floor(y - PLAYER_RADIUS);
     const r1 = Math.floor(y + PLAYER_RADIUS);
     const c0 = Math.floor(x - PLAYER_RADIUS);
@@ -148,11 +154,33 @@ class Game1 {
       for (let c = c0; c <= c1; c++) {
         if (isSolidTile(this.map, r, c)) return false;
         for (const b of this.bombs) {
-          if (b.r === r && b.c === c) return false;
+          if (b.r === r && b.c === c) {
+            if (selfId != null && b.passThrough && b.passThrough.has(selfId)) continue;
+            return false;
+          }
         }
       }
     }
     return true;
+  }
+
+  _overlapsTile(p, r, c) {
+    return (
+      r >= Math.floor(p.y - PLAYER_RADIUS) && r <= Math.floor(p.y + PLAYER_RADIUS) &&
+      c >= Math.floor(p.x - PLAYER_RADIUS) && c <= Math.floor(p.x + PLAYER_RADIUS)
+    );
+  }
+
+  // Drop players from a bomb's pass-through set once they no longer overlap it,
+  // so the bomb becomes solid to them again.
+  _updateBombPassThrough() {
+    for (const b of this.bombs) {
+      if (!b.passThrough || b.passThrough.size === 0) continue;
+      for (const pid of [...b.passThrough]) {
+        const pl = this.players[pid];
+        if (!pl || !pl.alive || !this._overlapsTile(pl, b.r, b.c)) b.passThrough.delete(pid);
+      }
+    }
   }
 
   _tryPlaceBomb(p) {
@@ -160,12 +188,19 @@ class Game1 {
     const r = Math.floor(p.y);
     const c = Math.floor(p.x);
     if (this.bombs.some((b) => b.r === r && b.c === c)) return;
+    // Players standing on the new bomb's tile may walk off it before it blocks them.
+    const passThrough = new Set();
+    for (const pid in this.players) {
+      const pl = this.players[pid];
+      if (pl.alive && this._overlapsTile(pl, r, c)) passThrough.add(pid);
+    }
     this.bombs.push({
       id: this._nextId++,
       r, c,
       timer: BOMB_FUSE,
       ownerId: p.id,
       range: p.bombRange,
+      passThrough,
     });
     p.bombsPlaced++;
   }
@@ -212,6 +247,7 @@ class Game1 {
         }
       }
     }
+    this.explosions.push({ cells, timer: EXPLOSION_DURATION });
     // damage players in blast
     for (const pid in this.players) {
       const p = this.players[pid];
@@ -288,14 +324,19 @@ class Game1 {
       const p = this.players[pid];
       if (!p.alive) continue;
       if (p.invuln > 0) p.invuln = Math.max(0, p.invuln - dt);
+      if (p.fireCooldown > 0) p.fireCooldown = Math.max(0, p.fireCooldown - dt);
       this._movePlayer(p, dt);
 
       if (p.input.shift && !p.prevShift) this._tryPlaceBomb(p);
-      if (p.input.space && !p.prevSpace) this._fireBullet(p);
+      if (p.input.space && !p.prevSpace && p.fireCooldown <= 0) {
+        this._fireBullet(p);
+        p.fireCooldown = FIRE_COOLDOWN;
+      }
       p.prevShift = p.input.shift;
       p.prevSpace = p.input.space;
     }
 
+    this._updateBombPassThrough();
     this._collectPowerups();
 
     // bombs
@@ -307,6 +348,10 @@ class Game1 {
     if (exploded.size > 0) {
       this.bombs = this.bombs.filter((b) => !exploded.has(b.id));
     }
+
+    // fade blast flames
+    for (const e of this.explosions) e.timer -= dt;
+    this.explosions = this.explosions.filter((e) => e.timer > 0);
 
     // bullets
     for (const bullet of this.bullets) {
@@ -360,6 +405,10 @@ class Game1 {
       shrunk: Array.from(this.shrunk),
       bombs: this.bombs.map((b) => ({ r: b.r, c: b.c, timer: b.timer })),
       bullets: this.bullets.map((b) => ({ x: b.x, y: b.y })),
+      explosions: this.explosions.map((e) => ({
+        cells: e.cells,
+        life: e.timer / EXPLOSION_DURATION,
+      })),
       powerups: this.powerups,
       players: Object.fromEntries(
         Object.entries(this.players).map(([id, p]) => [

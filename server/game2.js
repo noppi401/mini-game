@@ -1,14 +1,14 @@
 // Minigame 2: Slot Car Race
 // Authoritative server-side simulation. Fixed-lane oval track, SHIFT to accelerate/decelerate.
 
-const STRAIGHT_LENGTH = 260;
+const STRAIGHT_LENGTH = 520; // doubled straight length
 const BASE_RADIUS = 90;
-const LANE_WIDTH = 26;
+const LANE_WIDTH = 39; // 1.5x wider lanes
 const LANE_COUNT = 4;
-const MAX_SPEED = 60; // track-units / sec
-const ACCEL = 45;
-const FRICTION = 55;
-const CORNER_SPEED_LIMIT = MAX_SPEED * 0.58;
+const MAX_SPEED = 400; // track-units / sec (doubled again)
+const ACCEL = 280;
+const FRICTION = 260;
+const CORNER_SPEED_LIMIT = MAX_SPEED * 0.72; // wider margin before spinning out
 const SPINOUT_DURATION = 2.0;
 const SPINOUT_SPEED = MAX_SPEED * 0.12;
 const LAPS_TO_WIN = 3;
@@ -144,9 +144,12 @@ class Game2 {
       baseRadius: BASE_RADIUS,
       laneWidth: LANE_WIDTH,
       lapsToWin: LAPS_TO_WIN,
+      maxSpeed: MAX_SPEED,
+      cornerLimit: CORNER_SPEED_LIMIT,
       players: Object.fromEntries(
         Object.entries(this.players).map(([id, p]) => {
           const pos = trackPos(p.s, p.lane);
+          const ahead = trackPos(p.s + 1, p.lane); // tangent → travel heading
           return [
             id,
             {
@@ -154,6 +157,7 @@ class Game2 {
               x: pos.x,
               y: pos.y,
               inCorner: pos.inCorner,
+              heading: Math.atan2(ahead.y - pos.y, ahead.x - pos.x),
               speed: p.speed,
               laps: p.laps,
               spinning: p.spinTimer > 0,

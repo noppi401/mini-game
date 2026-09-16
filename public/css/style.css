@@ -29,6 +29,26 @@ button {
 }
 button:hover { background: #6a8fff; }
 button:disabled { background: #3a3f52; cursor: not-allowed; }
+button.ghost { background: #2a2f3f; }
+button.ghost:hover { background: #363c50; }
+
+#spectator-banner {
+  display: none;
+  background: #4a3a10; color: #ffd166; border: 1px solid #7a6320;
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: bold;
+  text-align: center; margin-bottom: 12px;
+}
+body.spectating #spectator-banner { display: block; }
+
+#game-choices { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.game-card {
+  flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  text-align: left; padding: 16px; background: #262b3a; border: 1px solid #333a52;
+}
+.game-card:hover { background: #2f3548; }
+.game-card .game-title { font-size: 13px; color: #9aa4c0; }
+.game-card .game-name { font-size: 18px; font-weight: bold; }
+.game-card .game-desc { font-size: 12px; color: #9aa4c0; }
 
 #player-list { list-style: none; padding: 0; margin: 8px 0; }
 #player-list li {
@@ -42,6 +62,16 @@ canvas {
   width: 100%; max-width: 520px; background: #0f1220; border-radius: 8px;
   display: block; margin: 12px auto; touch-action: none;
 }
+/* game2: track + tachometer side by side, allowed to overflow the app column */
+#g2-stage {
+  display: flex; gap: 16px; align-items: center; justify-content: center;
+  flex-wrap: wrap; width: max-content; max-width: 96vw;
+  margin: 12px auto; margin-left: 50%; transform: translateX(-50%);
+}
+#g2-stage canvas { margin: 0; }
+#g2-canvas { width: 520px; height: 334px; max-width: none; }
+#g2-tacho { width: 220px; height: 220px; max-width: none; background: transparent; }
+
 #g1-hud, #g2-hud {
   display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; margin-top: 8px;
 }

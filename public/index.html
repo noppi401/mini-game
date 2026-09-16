@@ -9,23 +9,46 @@
 <body>
 <div id="app">
 
+  <div id="spectator-banner">👁 観戦中</div>
+
   <section id="view-lobby" class="view">
     <h1>ミニゲーム集</h1>
-    <p class="sub">このURLを共有すれば、リンクを知っている人が参加できます(最大4人)</p>
+    <p class="sub">このURLを共有すれば、リンクを知っている人が参加できます(最大4人)。満員・進行中は観戦できます。</p>
 
     <div id="join-box">
       <input id="name-input" type="text" maxlength="16" placeholder="ニックネーム" />
       <button id="join-btn">参加する</button>
+      <button id="spectate-btn" class="ghost">観戦する</button>
     </div>
 
     <div id="player-list-box" style="display:none;">
       <h2>参加者 (<span id="player-count">0</span>/4)</h2>
       <ul id="player-list"></ul>
-      <button id="start-btn" style="display:none;">ゲーム開始</button>
+      <p id="spectator-count" class="sub"></p>
+      <button id="to-select-btn" style="display:none;">ゲーム選択へ</button>
       <p id="wait-msg" class="sub">ホストの開始を待っています…</p>
     </div>
 
     <p id="error-msg" class="error"></p>
+  </section>
+
+  <section id="view-select" class="view">
+    <h1>ゲームを選択</h1>
+    <div id="game-choices" style="display:none;">
+      <button class="game-card" data-game="1">
+        <span class="game-title">🛡 ミニゲーム1</span>
+        <span class="game-name">タンクバトル</span>
+        <span class="game-desc">最後の1人まで生き残れ</span>
+      </button>
+      <button class="game-card" data-game="2">
+        <span class="game-title">🏎 ミニゲーム2</span>
+        <span class="game-name">スロットカーレース</span>
+        <span class="game-desc">コーナー速度を制する者が勝つ</span>
+      </button>
+    </div>
+    <p id="select-few" class="sub" style="display:none;">人数が足りません(最低2人)。ロビーに戻って募集してください。</p>
+    <p id="select-wait" class="sub" style="display:none;">ホストがゲームを選んでいます…</p>
+    <button id="to-lobby-btn" class="ghost" style="display:none;">ロビーに戻る</button>
   </section>
 
   <section id="view-game1" class="view">
@@ -38,33 +61,25 @@
   <section id="view-result1" class="view">
     <h1>ミニゲーム1 結果</h1>
     <ol id="result1-list" class="result-list"></ol>
-    <h2>総合ポイント</h2>
-    <ol id="result1-totals" class="result-list"></ol>
-    <button id="next1-btn" style="display:none;">次のゲームへ</button>
-    <p id="next1-wait" class="sub">ホストの操作を待っています…</p>
+    <button id="back1-btn" style="display:none;">選択画面へ戻る</button>
+    <p id="back1-wait" class="sub">ホストの操作を待っています…</p>
   </section>
 
   <section id="view-game2" class="view">
     <h1>ミニゲーム2:スロットカーレース</h1>
     <div id="g2-hud"></div>
-    <canvas id="g2-canvas" width="560" height="360"></canvas>
-    <p class="sub">SHIFTを押す:加速 / 離す:減速(コーナーで速すぎるとスピンアウト)</p>
+    <div id="g2-stage">
+      <canvas id="g2-canvas" width="560" height="360"></canvas>
+      <canvas id="g2-tacho" width="220" height="220"></canvas>
+    </div>
+    <p class="sub">SHIFTを押す:加速 / 離す:減速。右のタコメーターの針が赤いゾーン(コーナー限界)に入ったままコーナーへ進入するとスピンアウト。</p>
   </section>
 
   <section id="view-result2" class="view">
     <h1>ミニゲーム2 結果</h1>
     <ol id="result2-list" class="result-list"></ol>
-    <h2>総合ポイント</h2>
-    <ol id="result2-totals" class="result-list"></ol>
-    <button id="next2-btn" style="display:none;">最終結果へ</button>
-    <p id="next2-wait" class="sub">ホストの操作を待っています…</p>
-  </section>
-
-  <section id="view-final" class="view">
-    <h1>最終結果</h1>
-    <ol id="final-list" class="result-list"></ol>
-    <button id="restart-btn" style="display:none;">もう一度遊ぶ</button>
-    <p id="restart-wait" class="sub">ホストの操作を待っています…</p>
+    <button id="back2-btn" style="display:none;">選択画面へ戻る</button>
+    <p id="back2-wait" class="sub">ホストの操作を待っています…</p>
   </section>
 
 </div>
