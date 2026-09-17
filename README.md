@@ -8,8 +8,9 @@ Node.js製サーバーをローカルで起動し、ngrokで外部公開してUR
 - [x] server/game1.js — ミニゲーム1(タンク×ボンバーマン)のサーバーロジック
 - [x] server/game2.js — ミニゲーム2(スロットカー)のサーバーロジック
 - [x] server/index.js — ロビー管理・WebSocket・進行管理
-- [x] public/index.html, public/css/style.css — 画面の土台
-- [ ] public/js/main.js — クライアント側の描画・入力処理(未着手・続きから実装が必要)
+- [x] public/index.html, public/css/style.css — 画面の土台(ロビー/ゲーム選択/観戦/結果)
+- [x] public/js/main.js — クライアント側の描画・入力処理(**PixiJS(WebGL)で実装済み**)
+- [x] public/js/vendor/pixi.min.mjs — 同梱した PixiJS 本体(CDN非依存・自前サーバーで配信)
 
 ## セットアップ
 
@@ -26,14 +27,24 @@ ngrok http 3000
 
 発行されたURLを参加者に共有してください。
 
-## 続きの実装(Claude Codeでの再開用メモ)
+## クライアント / 描画について
 
-`public/js/main.js` に以下を実装する必要があります:
+`public/js/main.js`(実装済み)がカバーする範囲:
 
-1. WebSocket接続(`ws://` or `wss://`、`location`から自動判定)
-2. ロビー画面の描画・参加/開始ボタンの制御(`join` / `start` メッセージ送受信)
-3. ミニゲーム1: `#g1-canvas` に `game1_state` を毎フレーム描画(マップ・プレイヤー・ボム・弾・縮小フィールド)、矢印キー/SHIFT/SPACEの入力を `input` メッセージで送信
-4. ミニゲーム2: `#g2-canvas` に `game2_state` を毎フレーム描画(トラック・プレイヤー位置・周回数)、SHIFT押下/解放を `input` メッセージで送信
-5. 結果画面(`result1` / `result2` / `final_result`)の描画、ホストのみに「次へ」ボタンを表示
+1. WebSocket接続(`ws://` or `wss://` を `location` から自動判定)
+2. ロビー・**ゲーム選択画面**・**観戦モード**・結果画面のUI制御(`join` / `spectate` / `to_select` / `to_lobby` / `pick` / `back_to_select`)
+3. ミニゲーム1: `#g1-canvas` に `game1_state` を描画、矢印キー/SHIFT/SPACE を `input` で送信
+4. ミニゲーム2: `#g2-canvas` に `game2_state` を描画(＋タコメーター `#g2-tacho`)、SHIFT押下/解放(＋モバイル向けにキャンバス長押し)を `input` で送信
 
-サーバー側メッセージ仕様は `server/index.js` の実装を参照してください。
+サーバー側メッセージ仕様は `server/index.js` を参照してください。
+
+### 描画技術(PixiJS + Canvas 2D ハイブリッド)
+
+ゲーム画面は **PixiJS(WebGL)** でGPU描画します。
+
+- **スプライト**: 精密なベクター戦車/レーシングカー(Canvas 2Dで描いた図形)を、プレイヤー色ごとに **一度だけGPUテクスチャへ焼き込み**、以降は PixiJS のスプライトとして合成します。
+- **状態補間**: サーバーは約30Hzで状態を配信。クライアント側で位置・角度を指数スムージングし、ディスプレイのリフレッシュレート(60fps等)で滑らかに描画。
+- **エフェクト**: ボム爆発の加算合成グロー、スピンアウト時の火花、戦車/車の影・カラーグローなど。
+- **マップ/トラック/ボム/弾** は `PIXI.Graphics`、**タコメーター** は専用の Canvas 2D ゲージで描画。
+
+PixiJS は `public/js/vendor/pixi.min.mjs` に同梱し、自前サーバーから配信します(CDN非依存・オフライン動作可)。`main.js` は ES モジュールとして読み込まれ(`<script type="module">`)、サーバーは `.mjs` を `text/javascript` で配信します。
