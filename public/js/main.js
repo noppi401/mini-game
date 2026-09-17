@@ -1150,19 +1150,56 @@ import * as PIXI from "./vendor/pixi.min.mjs";
 
   function mjSend(action) { sendMsg({ type: "mahjong", action }); }
 
-  function tileFace(t) {
-    const k = t.t;
+  // Pip layouts (3x3 grid coords) for pinzu circles / souzu bamboo.
+  const PIP = {
+    1: [[1, 1]],
+    2: [[1, 0], [1, 2]],
+    3: [[0, 0], [1, 1], [2, 2]],
+    4: [[0, 0], [2, 0], [0, 2], [2, 2]],
+    5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]],
+    6: [[0, 0], [1, 0], [2, 0], [0, 2], [1, 2], [2, 2]],
+    7: [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]],
+    8: [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [0, 2], [1, 2], [2, 2]],
+    9: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]],
+  };
+  const cx = (c) => 14 + c * 16, cy = (r) => 18 + r * 24;
+
+  function faceSVG(t) {
+    const k = t.t, aka = !!t.a;
     if (k < 27) {
       const suit = Math.floor(k / 9), num = (k % 9) + 1;
-      return { cls: ["man", "pin", "sou"][suit] + (t.a ? " aka" : ""), n: String(num), s: MJ_SUITCHAR[suit] };
+      if (suit === 0) { // 萬子
+        const col = aka ? "#d21b1b" : "#173a8a";
+        return `<svg viewBox="0 0 60 84"><text x="30" y="44" text-anchor="middle" font-size="42" font-weight="800" fill="${col}">${num}</text><text x="30" y="74" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">萬</text></svg>`;
+      }
+      const pts = PIP[num];
+      if (suit === 1) { // 筒子 (circles)
+        const c1 = aka ? "#d21b1b" : "#1466b0";
+        return `<svg viewBox="0 0 60 84">` + pts.map(([c, r]) =>
+          `<circle cx="${cx(c)}" cy="${cy(r)}" r="7.2" fill="${c1}"/><circle cx="${cx(c)}" cy="${cy(r)}" r="3" fill="#f4efe2"/>`).join("") + `</svg>`;
+      }
+      // 索子 (bamboo sticks)
+      const sc = aka ? "#d21b1b" : "#1f8a3a";
+      return `<svg viewBox="0 0 60 84">` + pts.map(([c, r]) =>
+        `<rect x="${cx(c) - 3.5}" y="${cy(r) - 9}" width="7" height="18" rx="3" fill="${sc}"/>`).join("") + `</svg>`;
     }
-    return { cls: "honor", n: MJ_HONOR[k - 27], s: "" };
+    // honors
+    if (k === 31) { // 白 (blank framed)
+      return `<svg viewBox="0 0 60 84"><rect x="13" y="15" width="34" height="54" rx="5" fill="none" stroke="#2a5ca0" stroke-width="3"/></svg>`;
+    }
+    const ch = MJ_HONOR[k - 27];
+    const col = k === 33 ? "#c0392b" : (k === 32 ? "#127a3a" : "#20242e"); // 中 red / 發 green / winds dark
+    return `<svg viewBox="0 0 60 84"><text x="30" y="59" text-anchor="middle" font-size="44" font-weight="800" fill="${col}">${ch}</text></svg>`;
+  }
+  function tileClass(t) {
+    const k = t.t;
+    const suit = k < 27 ? ["man", "pin", "sou"][Math.floor(k / 9)] : "honor";
+    return suit + (t.a ? " aka" : "");
   }
   function tileEl(t, size, opts = {}) {
-    const f = tileFace(t);
     const el = document.createElement(opts.click ? "button" : "div");
-    el.className = `tile ${size} ${f.cls}${opts.click ? " clickable" : ""}${opts.extra ? " " + opts.extra : ""}`;
-    el.innerHTML = `<span class="n">${f.n}</span>` + (f.s ? `<span class="s">${f.s}</span>` : "");
+    el.className = `tile ${size} ${tileClass(t)}${opts.click ? " clickable" : ""}${opts.extra ? " " + opts.extra : ""}`;
+    el.innerHTML = faceSVG(t);
     if (opts.id != null) el.dataset.id = opts.id;
     if (opts.click) el.addEventListener("click", opts.click);
     return el;

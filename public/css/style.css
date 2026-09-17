@@ -268,3 +268,16 @@ code { background: #0d1119; padding: 1px 6px; border-radius: 5px; font-size: 12p
 /* game cards get a stronger hover */
 .game-card { transition: transform .1s, box-shadow .15s, border-color .15s; }
 .game-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--primary); }
+
+/* ===== Package C: SVG tile faces + seat rotation ===== */
+.tile { padding: 0; overflow: hidden; }
+.tile svg { width: 100%; height: 100%; display: block; }
+.tile.small { width: 18px; height: 24px; }
+.tile.hand { width: 28px; height: 39px; }
+.tile.aka { background: #fff3f0; }
+/* side seats: upright tiles arranged as vertical columns (readable table layout) */
+#mj-seat-left .mj-hand, #mj-seat-right .mj-hand {
+  flex-direction: column; flex-wrap: wrap; max-height: 250px; align-content: center; gap: 2px;
+}
+#mj-seat-left .mj-pond, #mj-seat-right .mj-pond { grid-template-columns: repeat(3, 18px); }
+#mj-seat-left .mj-melds, #mj-seat-right .mj-melds { flex-direction: column; }
