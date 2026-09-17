@@ -88,12 +88,17 @@ class Mahjong {
     this.result = null;      // final ranking when the whole game ends
     this.version = 0;
     this._cpuTimer = 0;
+    this._turnSeq = 0;
     this._roundEndAt = 0;
     this.log = [];
     this.startHand();
   }
 
   bump() { this.version++; }
+
+  // Every hand-off bumps a sequence number so the human think clock in tick()
+  // restarts for each individual turn, not only when the seat index changes.
+  setTurn(seat) { this.turn = seat; this._turnSeq = (this._turnSeq || 0) + 1; }
 
   // A human left mid-game: their seat is taken over by the CPU so play continues.
   dropPlayer(playerId) {
@@ -125,7 +130,7 @@ class Mahjong {
     this.phase = "playing";      // playing | callwait | roundend | gameend
     this.pending = null;         // call window data
     this.roundResult = null;
-    this.turn = this.dealer;
+    this.setTurn(this.dealer);
     this.firstGoAround = true;   // for tenhou/chiihou / double riichi
     this.anyCallMade = false;
 
@@ -174,7 +179,7 @@ class Mahjong {
       this.lastDrawWasRinshan = false;
     }
     s.drawn = id;
-    this.turn = seat;
+    this.setTurn(seat);
     // recompute this seat's waits for tenpai/UI
     this.updateWaits(s);
     return true;
@@ -533,7 +538,7 @@ class Mahjong {
     this.markCalled(fromSeat, tileId);
     this.pending = null;
     this.phase = "playing";
-    this.turn = seat;
+    this.setTurn(seat);
     if (kind === "kan") {
       this.kansMade++;
       this.drawTile(seat, true); // rinshan
@@ -561,7 +566,7 @@ class Mahjong {
     this.markCalled(fromSeat, tileId);
     this.pending = null;
     this.phase = "playing";
-    this.turn = seat;
+    this.setTurn(seat);
     s.drawn = null;
     this.updateWaits(s);
     this.bump();
@@ -838,7 +843,6 @@ class Mahjong {
     if (this.phase === "playing") {
       const s = this.seats[this.turn];
       if (s.isCPU) {
-        this._turnStart = 0;
         if (nowMs - this._cpuTimer > 800) {
           this.cpuPlay(this.turn);
           this._cpuTimer = nowMs;
@@ -847,7 +851,7 @@ class Mahjong {
       } else {
         this._cpuTimer = nowMs; // reset so CPU acts promptly when it becomes their turn
         // human turn timeout → auto-discard the drawn tile (keeps the game moving)
-        const key = "p" + this.turn;
+        const key = this._turnSeq;
         if (this._turnKey !== key) { this._turnKey = key; this._turnStart = nowMs; }
         if (nowMs - this._turnStart > TURN_LIMIT_MS) {
           this.doDiscard(this.turn, s.drawn != null ? s.drawn : s.hand[s.hand.length - 1], false);
