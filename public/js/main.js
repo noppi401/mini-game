@@ -249,6 +249,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   function renderSelect() {
     const host = isHost();
     $("#game-choices").style.display = host && canProceed ? "flex" : "none";
+    $("#mj-level").style.display = host && canProceed ? "block" : "none";
     $("#select-few").style.display = host && !canProceed ? "block" : "none";
     $("#to-lobby-btn").style.display = host ? "inline-block" : "none";
     $("#select-wait").style.display = host ? "none" : "block";
@@ -384,8 +385,18 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   $("#spectate-btn").addEventListener("click", () => sendMsg({ type: "spectate" }));
   $("#to-select-btn").addEventListener("click", () => sendMsg({ type: "to_select" }));
   $("#to-lobby-btn").addEventListener("click", () => sendMsg({ type: "to_lobby" }));
+  let mjLevel = "normal";
+  document.querySelectorAll(".seg-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      mjLevel = b.dataset.level;
+      document.querySelectorAll(".seg-btn").forEach((x) => x.classList.toggle("active", x === b));
+    });
+  });
   document.querySelectorAll(".game-card").forEach((btn) => {
-    btn.addEventListener("click", () => sendMsg({ type: "pick", game: Number(btn.dataset.game) }));
+    btn.addEventListener("click", () => {
+      const game = Number(btn.dataset.game);
+      sendMsg(game === 3 ? { type: "pick", game, level: mjLevel } : { type: "pick", game });
+    });
   });
   $("#back1-btn").addEventListener("click", () => sendMsg({ type: "back_to_select" }));
   $("#back2-btn").addEventListener("click", () => sendMsg({ type: "back_to_select" }));
@@ -1232,6 +1243,8 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const order = state.seats.map((s) => s.seat).sort((a, b) => state.seats[b].score - state.seats[a].score);
     state._rank = {}; order.forEach((seat, i) => { state._rank[seat] = i + 1; });
 
+    renderWaits(state);
+
     const actions = state.actions || null;
     if (!actions || !actions.riichiTiles) mjRiichiMode = false;
 
@@ -1250,12 +1263,39 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     renderMjOverlay(state);
   }
 
+  // waits + current yaku panel (viewer, when tenpai)
+  function renderWaits(state) {
+    const box = $("#mj-waits");
+    if (!state.waitInfo || !state.waitInfo.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    box.classList.remove("hidden");
+    box.innerHTML = "";
+    const label = document.createElement("span"); label.className = "mj-waits-label";
+    label.textContent = state.seats[state.mySeat] && state.seats[state.mySeat].riichi ? "待ち(リーチ)" : "待ち";
+    box.appendChild(label);
+    // waiting tiles
+    state.waitInfo.forEach((w) => box.appendChild(tileEl(w.tile, "small")));
+    // union of yaku across waits (current 役)
+    const yakuSet = new Map();
+    state.waitInfo.forEach((w) => (w.yaku || []).forEach((y) => { if (!yakuSet.has(y.name)) yakuSet.set(y.name, y.han); }));
+    const maxHan = Math.max(0, ...state.waitInfo.map((w) => w.han));
+    const yspan = document.createElement("span"); yspan.className = "mj-waits-yaku";
+    if (yakuSet.size) {
+      yspan.textContent = "役: " + [...yakuSet.keys()].join("・") + (maxHan ? ` (最大${maxHan}翻)` : "");
+    } else {
+      yspan.textContent = "役なし(このままでは和了不可)";
+      yspan.classList.add("noyaku");
+    }
+    box.appendChild(yspan);
+  }
+
   function renderMjCenter(state) {
     const el = $("#mj-center");
     if (!el) return;
     el.innerHTML = "";
     const round = document.createElement("div"); round.className = "mjc-round"; round.textContent = state.roundLabel;
-    const sub = document.createElement("div"); sub.className = "mjc-sub"; sub.textContent = `${state.honba}本場 ・ 残り${state.wallRemaining}枚`;
+    const lv = { easy: "弱", normal: "中", hard: "強" }[state.cpuLevel] || "";
+    const sub = document.createElement("div"); sub.className = "mjc-sub";
+    sub.textContent = `${state.honba}本場 ・ 残り${state.wallRemaining}枚` + (lv ? ` ・ CPU:${lv}` : "");
     el.appendChild(round); el.appendChild(sub);
     if (state.riichiSticks > 0) {
       const wrap = document.createElement("div"); wrap.className = "mjc-sticks";
@@ -1441,7 +1481,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const r = state.roundResult;
     if (state.phase !== "roundend" || !r) { ov.innerHTML = ""; mjOverlayKey = null; return; }
     // avoid rebuilding (and re-animating) on every state tick of the same result
-    const key = state.version + ":" + r.type + ":" + (r.winner != null ? r.winner : "d");
+    const key = state.version + ":" + r.type + ":" + (r.wins ? r.wins.map((w) => w.seat).join(",") : "d");
     if (mjOverlayKey === key) return;
     mjOverlayKey = key;
     ov.innerHTML = "";
@@ -1452,50 +1492,53 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     if (r.type === "draw") {
       const nagashiSeats = (r.nagashi || []).map((n, i) => n ? i : -1).filter((i) => i >= 0);
       const h = document.createElement("h3");
-      h.textContent = nagashiSeats.length ? "流し満貫" : "流局";
+      h.textContent = r.abort ? r.abort : (nagashiSeats.length ? "流し満貫" : "流局");
       card.appendChild(h);
       if (nagashiSeats.length) {
         const ng = document.createElement("div"); ng.className = "mj-yaku";
         ng.textContent = "流し満貫: " + nagashiSeats.map((i) => state.seats[i].wind + (state.seats[i].name || "")).join("、");
         card.appendChild(ng);
       }
-      const tp = document.createElement("div"); tp.className = "mj-yaku";
-      tp.textContent = "聴牌: " + (r.tenpai.map((t, i) => t ? (state.seats[i].wind + (state.seats[i].name || "")) : null).filter(Boolean).join("、") || "なし");
-      card.appendChild(tp);
-    } else {
-      const win = r.hands && r.hands[r.winner];
-      const wname = escapeHtml(state.seats[r.winner].name || "CPU");
-      const via = r.type === "tsumo" ? "ツモ" : "ロン";
-      const h = document.createElement("h3");
-      h.innerHTML = `<span class="wind">${state.seats[r.winner].wind}</span> ${wname} ${via}和了` +
-        (r.type === "ron" ? ` <span class="mj-from">放銃: ${escapeHtml(state.seats[r.loser].name || "CPU")}</span>` : "");
-      card.appendChild(h);
-
-      // winning hand tiles (concealed + melds), winning tile highlighted
-      if (win) {
-        const hwrap = document.createElement("div"); hwrap.className = "mj-win-hand";
-        const winId = r.winTile ? r.winTile.id : null;
-        (win.hand || []).forEach((t) => hwrap.appendChild(tileEl(t, "meld", { extra: t.id === winId ? "win-tile" : "" })));
-        (win.melds || []).forEach((m) => {
-          const sep = document.createElement("span"); sep.className = "mj-meld-sep"; hwrap.appendChild(sep);
-          m.tiles.forEach((t) => hwrap.appendChild(tileEl(t, "meld")));
-        });
-        card.appendChild(hwrap);
+      if (!r.abort) {
+        const tp = document.createElement("div"); tp.className = "mj-yaku";
+        tp.textContent = "聴牌: " + (r.tenpai.map((t, i) => t ? (state.seats[i].wind + (state.seats[i].name || "")) : null).filter(Boolean).join("、") || "なし");
+        card.appendChild(tp);
       }
-
-      const yk = document.createElement("div"); yk.className = "mj-yaku";
-      (r.yaku || []).forEach((y) => {
-        const s = document.createElement("span"); s.className = "mj-yaku-item";
-        s.innerHTML = `${escapeHtml(y.name)}${y.han ? ` <b>${y.han}</b>` : ""}`;
-        yk.appendChild(s);
+    } else {
+      const via = r.type === "tsumo" ? "ツモ" : "ロン";
+      if (r.wins && r.wins.length > 1) {
+        const dh = document.createElement("h3"); dh.textContent = r.wins.length === 2 ? "ダブロン" : "複数和了"; card.appendChild(dh);
+      }
+      (r.wins || []).forEach((w) => {
+        const win = r.hands && r.hands[w.seat];
+        const wname = escapeHtml(state.seats[w.seat].name || "CPU");
+        const h = document.createElement("h3");
+        h.innerHTML = `<span class="wind">${state.seats[w.seat].wind}</span> ${wname} ${via}和了` +
+          (r.type === "ron" && r.loser != null ? ` <span class="mj-from">放銃: ${escapeHtml(state.seats[r.loser].name || "CPU")}</span>` : "");
+        card.appendChild(h);
+        if (win) {
+          const hwrap = document.createElement("div"); hwrap.className = "mj-win-hand";
+          const winId = w.winTile ? w.winTile.id : null;
+          (win.hand || []).forEach((t) => hwrap.appendChild(tileEl(t, "meld", { extra: t.id === winId ? "win-tile" : "" })));
+          (win.melds || []).forEach((m) => {
+            const sep = document.createElement("span"); sep.className = "mj-meld-sep"; hwrap.appendChild(sep);
+            m.tiles.forEach((t) => hwrap.appendChild(tileEl(t, "meld")));
+          });
+          card.appendChild(hwrap);
+        }
+        const yk = document.createElement("div"); yk.className = "mj-yaku";
+        (w.yaku || []).forEach((y) => {
+          const sp = document.createElement("span"); sp.className = "mj-yaku-item";
+          sp.innerHTML = `${escapeHtml(y.name)}${y.han ? ` <b>${y.han}</b>` : ""}`;
+          yk.appendChild(sp);
+        });
+        card.appendChild(yk);
+        const big = document.createElement("div"); big.className = "mj-score-big";
+        big.textContent = (w.yakuman ? "役満" : `${w.han}翻 ${w.fu}符`) + ` ／ ${w.points.total}点`;
+        card.appendChild(big);
       });
-      card.appendChild(yk);
 
-      const big = document.createElement("div"); big.className = "mj-score-big";
-      big.textContent = (r.yakuman ? "役満" : `${r.han}翻 ${r.fu}符`) + ` ／ ${r.points.total}点`;
-      card.appendChild(big);
-
-      // dora / ura indicators
+      // dora / ura indicators (once)
       const drow = document.createElement("div"); drow.className = "mj-yaku";
       drow.appendChild(document.createTextNode("ドラ表示 "));
       (r.dora || []).forEach((t) => drow.appendChild(tileEl(t, "small")));
@@ -1720,8 +1763,9 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     if (state.phase === "roundend" && state.roundResult) {
       const r = state.roundResult, key = state.version + ":" + r.type;
       if (_mjPrev.roundKey !== key) {
+        const iWon = r.wins && r.wins.some((w) => w.seat === state.mySeat);
         if (r.type === "draw") playSfx("round");
-        else if (r.winner === state.mySeat) { playSfx("win"); vibrate([60, 40, 120]); }
+        else if (iWon) { playSfx("win"); vibrate([60, 40, 120]); }
         else if (r.loser === state.mySeat) playSfx("lose");
         else playSfx("round");
         _mjPrev.roundKey = key;

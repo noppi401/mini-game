@@ -62,6 +62,14 @@
         <span class="game-desc">赤ドラあり・4人打ち。空席はCPU</span>
       </button>
     </div>
+    <div id="mj-level" style="display:none;">
+      <span class="sub">麻雀CPUの強さ:</span>
+      <div class="seg">
+        <button class="seg-btn" data-level="easy">弱</button>
+        <button class="seg-btn active" data-level="normal">中</button>
+        <button class="seg-btn" data-level="hard">強</button>
+      </div>
+    </div>
     <p id="select-few" class="sub" style="display:none;">人数が足りません(最低2人)。ロビーに戻って募集してください。</p>
     <p id="select-wait" class="sub" style="display:none;">ホストがゲームを選んでいます…</p>
     <button id="to-lobby-btn" class="ghost" style="display:none;">ロビーに戻る</button>
@@ -130,6 +138,7 @@
       <div class="mj-seat" id="mj-seat-top"></div>
       <div class="mj-seat" id="mj-seat-left"></div>
     </div>
+    <div id="mj-waits" class="hidden"></div>
     <div id="mj-timer" class="hidden"><div id="mj-timer-fill"></div></div>
     <div id="mj-actions"></div>
     <div id="mj-overlay"></div>

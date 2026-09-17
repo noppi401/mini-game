@@ -353,3 +353,18 @@ code { background: #0d1119; padding: 1px 6px; border-radius: 5px; font-size: 12p
   .dpad { grid-template-columns:repeat(3,48px); grid-template-rows:repeat(3,48px); }
   #banner { font-size:34px; }
 }
+
+/* ===== Level selector + waits panel ===== */
+#mj-level { margin: 12px 0; display: flex; align-items: center; gap: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg-btn { background: var(--surface); color: var(--muted); border: none; border-radius: 0; padding: 8px 16px; box-shadow: none; font-weight: 700; }
+.seg-btn:hover { background: var(--surface2); filter: none; }
+.seg-btn.active { background: linear-gradient(180deg, var(--primary-hi), var(--primary)); color: #fff; }
+#mj-waits {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 8px auto 0; max-width: 560px; padding: 6px 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.mj-waits-label { font-size: 12px; color: var(--accent); font-weight: 700; }
+.mj-waits-yaku { font-size: 12px; color: #cdd6ea; }
+.mj-waits-yaku.noyaku { color: #ff9b8f; }

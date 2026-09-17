@@ -55,8 +55,9 @@ function waitsFor(counts, meldCount) {
 }
 
 class Mahjong {
-  constructor(playerIds) {
+  constructor(playerIds, opts = {}) {
     // playerIds: array length up to 4; missing seats are CPU.
+    this.cpuLevel = ["easy", "normal", "hard"].includes(opts.level) ? opts.level : "normal";
     this.seats = [];
     for (let i = 0; i < 4; i++) {
       const pid = playerIds[i] || null;
@@ -212,7 +213,7 @@ class Mahjong {
   }
 
   // Build the hand object for scoring and return score or null (no yaku).
-  scoreFor(seat, winTileId, tsumo) {
+  scoreFor(seat, winTileId, tsumo, honbaOverride) {
     const s = this.seats[seat];
     const concealedIds = tsumo ? this.handAll(s) : s.hand.concat([winTileId]);
     const counts = idsToCounts(concealedIds);
@@ -244,7 +245,7 @@ class Mahjong {
       tenhou: false, chiihou: false,
       doraCount, uraCount, akaCount,
     };
-    return C.scoreWin(hand, this.honba, isDealer);
+    return C.scoreWin(hand, honbaOverride == null ? this.honba : honbaOverride, isDealer);
   }
 
   // ---------- available meld calls on a discard ----------
@@ -409,10 +410,15 @@ class Mahjong {
       else if (r.kind === "chi") chi = { seat: i, tiles: r.tiles };
     }
 
+    if (rons.length >= 3) {
+      // 三家和 (triple ron) → abortive draw, dealer keeps
+      this.finishRound({ type: "draw", abort: "三家和", tenpai: [false, false, false, false], deltas: [0, 0, 0, 0], dealerKeeps: true });
+      return;
+    }
     if (rons.length > 0) {
-      // atamahane: winner is the nearest seat counter-clockwise from discarder
+      // order winners by turn distance from discarder (nearest gets sticks/honba)
       rons.sort((a, b) => ((a - p.discardSeat + 4) % 4) - ((b - p.discardSeat + 4) % 4));
-      this.resolveRon(rons[0], p.discardSeat, p.tileId);
+      this.resolveMultiRon(rons, p.discardSeat, p.tileId);
       return;
     }
 
@@ -483,22 +489,29 @@ class Mahjong {
     deltas[seat] += this.riichiSticks * 1000;
     this.applyScoreDeltas(deltas);
     this.riichiSticks = 0;
-    this.finishRound({ type: "tsumo", winner: seat, score: sc, deltas, winTile: s.drawn });
+    this.finishRound({ type: "tsumo", loser: null, deltas, wins: [{ seat, score: sc, winTile: s.drawn }] });
     return true;
   }
 
-  resolveRon(winner, loser, tileId) {
-    const sc = this.scoreFor(winner, tileId, false);
-    if (!sc) { // safety: no yaku → treat as pass
-      this.pending = null; this.advanceAfterDiscard(loser); return;
-    }
+  // One or more ron winners on the same discard (double ron). Honba and riichi
+  // sticks go to the head-bump winner (nearest to the discarder in turn order).
+  resolveMultiRon(winners, loser, tileId) {
+    const wins = [];
     const deltas = [0, 0, 0, 0];
-    deltas[loser] -= sc.points.total;
-    deltas[winner] += sc.points.total;
-    deltas[winner] += this.riichiSticks * 1000;
+    winners.forEach((w, idx) => {
+      const isHead = idx === 0;
+      const sc = this.scoreFor(w, tileId, false, isHead ? undefined : 0); // honba only for head
+      if (!sc) return;
+      deltas[loser] -= sc.points.total;
+      deltas[w] += sc.points.total;
+      wins.push({ seat: w, score: sc, winTile: tileId });
+    });
+    if (wins.length === 0) { this.pending = null; this.advanceAfterDiscard(loser); return; }
+    // riichi sticks to the head winner
+    deltas[wins[0].seat] += this.riichiSticks * 1000;
     this.applyScoreDeltas(deltas);
     this.riichiSticks = 0;
-    this.finishRound({ type: "ron", winner, loser, score: sc, deltas, winTile: tileId });
+    this.finishRound({ type: "ron", loser, deltas, wins });
   }
 
   applyScoreDeltas(deltas) { for (let i = 0; i < 4; i++) this.seats[i].score += deltas[i]; }
@@ -658,7 +671,7 @@ class Mahjong {
     // determine renchan / advance
     let dealerKeeps = false;
     if (result.type === "tsumo" || result.type === "ron") {
-      dealerKeeps = result.winner === this.dealer;
+      dealerKeeps = (result.wins || []).some((w) => w.seat === this.dealer);
     } else if (result.type === "draw") {
       dealerKeeps = !!result.dealerKeeps;
     }
@@ -668,9 +681,8 @@ class Mahjong {
       seat: s.seat, hand: s.hand.slice(), melds: s.melds.map((m) => ({ ...m })),
     }));
     result.dora = this.revealedDoraIndicators().slice();
-    result.ura = (result.type === "tsumo" || result.type === "ron")
-      ? (this.seats[result.winner].riichi ? this.uraDoraIndicators().slice() : [])
-      : [];
+    result.ura = ((result.wins || []).some((w) => this.seats[w.seat].riichi))
+      ? this.uraDoraIndicators().slice() : [];
     this._pendingAdvance = { dealerKeeps };
     this.bump();
   }
@@ -724,21 +736,60 @@ class Mahjong {
   cpuPlay(seat) {
     const s = this.seats[seat];
     if (this.canTsumo(seat)) { this.doTsumo(seat); return; }
-    // riichi if concealed, tenpai, and not yet declared and enough points
+    const level = this.cpuLevel;
+
+    // 弱: ツモ切りのみ
+    if (level === "easy") {
+      this.doDiscard(seat, s.drawn != null ? s.drawn : s.hand[s.hand.length - 1], false);
+      return;
+    }
+
+    const iAmTenpai = waitsFor(idsToCounts(s.hand), this.meldCount(s)).length > 0;
+    const threats = this.seats.filter((o, i) => i !== seat && o.riichi);
+
+    // 強: リーチ者がいて自分が非テンパイならベタオリ(現物優先)
+    if (level === "hard" && threats.length > 0 && !iAmTenpai && !s.riichi) {
+      const safe = this.cpuSafeDiscard(seat, threats);
+      if (safe != null) { this.doDiscard(seat, safe, false); return; }
+    }
+
+    // 中/強: 門前テンパイならリーチ
     if (s.menzen && !s.riichi && s.score >= RIICHI_COST && this.liveRemaining() >= 4) {
       const all = this.handAll(s);
-      // try to find a discard that keeps tenpai; prefer declaring riichi
       for (const t of [s.drawn, ...s.hand]) {
-        const after = all.filter((x, idx) => x !== t || all.indexOf(t) !== idx ? true : false);
+        if (t == null) continue;
         const rest = all.slice(); rest.splice(rest.indexOf(t), 1);
-        if (waitsFor(idsToCounts(rest), this.meldCount(s)).length > 0) {
-          this.doDiscard(seat, t, true);
-          return;
-        }
+        if (waitsFor(idsToCounts(rest), this.meldCount(s)).length > 0) { this.doDiscard(seat, t, true); return; }
       }
     }
-    // otherwise discard the least useful tile (light efficiency heuristic)
+    // 牌効率で捨牌
     this.doDiscard(seat, this.cpuBestDiscard(s), false);
+  }
+
+  // Pick a genbutsu-safe discard against the given riichi threats (betaori).
+  cpuSafeDiscard(seat, threats) {
+    const s = this.seats[seat];
+    const all = [...new Set(this.handAll(s))];
+    const safeVs = (kind, o) => o.discards.some((d) => kindOf(d.id) === kind);
+    const fully = all.filter((id) => threats.every((o) => safeVs(kindOf(id), o)));
+    if (fully.length) {
+      // among fully-safe tiles, keep the best shape (discard least useful)
+      let best = fully[0], bestScore = -Infinity;
+      for (const id of fully) {
+        const rest = this.handAll(s).slice(); rest.splice(rest.indexOf(id), 1);
+        const sc = this.shapeScore(idsToCounts(rest));
+        if (sc > bestScore) { bestScore = sc; best = id; }
+      }
+      return best;
+    }
+    // no genbutsu: pick the tile safe vs the most threats, terminals/honors first
+    let best = null, bestScore = -Infinity;
+    for (const id of all) {
+      const k = kindOf(id);
+      const score = threats.filter((o) => safeVs(k, o)).length * 10 + (C.isTerminalOrHonor(k) ? 1 : 0);
+      if (score > bestScore) { bestScore = score; best = id; }
+    }
+    return best;
   }
 
   // Pick the discard that leaves the best-connected 13-tile shape.
@@ -878,6 +929,7 @@ class Mahjong {
       lastDiscardSeat: this.lastDiscard ? this.lastDiscard.seat : -1,
       turnLimitSec: Math.round(TURN_LIMIT_MS / 1000),
       callLimitSec: 8,
+      cpuLevel: this.cpuLevel,
       seats,
       version: this.version,
     };
@@ -915,10 +967,21 @@ class Mahjong {
         act.callTile = this.tileObj(this.pending.tileId);
       }
       state.actions = act;
-      // tenpai / furiten indicator for the viewer
+      // tenpai / furiten + waits + current yaku for the viewer
       const vwaits = waitsFor(idsToCounts(s.hand), this.meldCount(s));
       state.tenpai = vwaits.length > 0;
       state.furiten = state.tenpai && (s.furitenByDiscard || s.furiten || s.tempFuriten);
+      if (state.tenpai) {
+        state.waitInfo = vwaits.map((k) => {
+          const sc = this.scoreFor(viewerSeat, k * 4, false); // "if you ron this tile"
+          return {
+            tile: { t: k, a: 0 },
+            han: sc ? sc.han : 0,
+            yakuman: sc ? !!sc.yakuman : false,
+            yaku: sc ? sc.yaku.map((y) => ({ name: y.name, han: y.han })) : [],
+          };
+        });
+      }
     }
 
     // round / game result payload
@@ -934,19 +997,19 @@ class Mahjong {
   serializeResult(r) {
     const out = { type: r.type, deltas: r.deltas, dealerKeeps: r.dealerKeeps };
     if (r.type === "tsumo" || r.type === "ron") {
-      out.winner = r.winner;
       out.loser = r.loser != null ? r.loser : null;
-      out.winTile = this.tileObj(r.winTile);
-      out.han = r.score.han;
-      out.fu = r.score.fu;
-      out.yakuman = r.score.yakuman;
-      out.yaku = r.score.yaku;
-      out.points = r.score.points;
       out.dora = (r.dora || []).map((id) => this.tileObj(id));
       out.ura = (r.ura || []).map((id) => this.tileObj(id));
+      out.wins = (r.wins || []).map((w) => ({
+        seat: w.seat,
+        winTile: this.tileObj(w.winTile),
+        han: w.score.han, fu: w.score.fu, yakuman: w.score.yakuman,
+        yaku: w.score.yaku, points: w.score.points,
+      }));
     } else {
       out.tenpai = r.tenpai;
       if (r.nagashi) out.nagashi = r.nagashi;
+      if (r.abort) out.abort = r.abort;
     }
     out.hands = (r.hands || []).map((h) => ({
       seat: h.seat,

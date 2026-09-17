@@ -156,10 +156,10 @@ function buildResult(ranking) {
   };
 }
 
-function startGame(n) {
+function startGame(n, opts = {}) {
   const ids = connectedPlayers().map((p) => p.id);
   if (n === 3) {
-    room.game3 = new Mahjong(ids.slice(0, 4)); // empty seats become CPU
+    room.game3 = new Mahjong(ids.slice(0, 4), { level: opts.level }); // empty seats become CPU
     room.phase = "game3";
     room._mjVersion = -1;
     broadcast({ type: "phase", phase: room.phase });
@@ -268,7 +268,7 @@ wss.on("connection", (ws) => {
       if (!isHost || room.phase !== "select") return;
       if (connectedPlayers().length < MIN_PLAYERS) return;
       const g = [1, 2, 3].includes(msg.game) ? msg.game : 1;
-      startGame(g);
+      startGame(g, { level: msg.level });
       return;
     }
 
