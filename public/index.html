@@ -50,16 +50,19 @@
         <span class="game-title">🛡 ミニゲーム1</span>
         <span class="game-name">タンクバトル</span>
         <span class="game-desc">最後の1人まで生き残れ</span>
+        <span class="game-req" data-req-for="1"></span>
       </button>
       <button class="game-card" data-game="2">
         <span class="game-title">🏎 ミニゲーム2</span>
         <span class="game-name">スロットカーレース</span>
         <span class="game-desc">コーナー速度を制する者が勝つ</span>
+        <span class="game-req" data-req-for="2"></span>
       </button>
       <button class="game-card" data-game="3">
         <span class="game-title">🀄 ミニゲーム3</span>
         <span class="game-name">麻雀(東風戦)</span>
         <span class="game-desc">赤ドラあり・4人打ち。空席はCPU</span>
+        <span class="game-req" data-req-for="3"></span>
       </button>
     </div>
     <div id="mj-level" style="display:none;">
@@ -70,7 +73,7 @@
         <button class="seg-btn" data-level="hard">強</button>
       </div>
     </div>
-    <p id="select-few" class="sub" style="display:none;">人数が足りません(最低2人)。ロビーに戻って募集してください。</p>
+    <p id="select-few" class="sub" style="display:none;"></p>
     <p id="select-wait" class="sub" style="display:none;">ホストがゲームを選んでいます…</p>
     <button id="to-lobby-btn" class="ghost" style="display:none;">ロビーに戻る</button>
   </section>

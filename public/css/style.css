@@ -268,6 +268,10 @@ code { background: #0d1119; padding: 1px 6px; border-radius: 5px; font-size: 12p
 /* game cards get a stronger hover */
 .game-card { transition: transform .1s, box-shadow .15s, border-color .15s; }
 .game-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--primary); }
+.game-card:disabled { opacity: .45; background: #262b3a; border-color: #333a52; cursor: not-allowed; }
+.game-card:disabled:hover { transform: none; box-shadow: none; background: #262b3a; border-color: #333a52; }
+.game-card .game-req:empty { display: none; }
+.game-card .game-req { margin-top: 4px; font-size: 11px; color: var(--accent); }
 
 /* ===== Package C: SVG tile faces + seat rotation ===== */
 .tile { padding: 0; overflow: hidden; }

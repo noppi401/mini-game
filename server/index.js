@@ -9,7 +9,10 @@ const { Mahjong } = require("./mahjong");
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 4;
-const MIN_PLAYERS = 2;
+// Mahjong fills empty seats with CPU, so it runs with a single human.
+// Tank battle / slot car have no CPU opponents and still need two.
+const GAME_MIN_PLAYERS = { 1: 2, 2: 2, 3: 1 };
+const MIN_PLAYERS = Math.min(...Object.values(GAME_MIN_PLAYERS));
 const TICK_MS = 33; // ~30Hz
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -88,6 +91,7 @@ function broadcastRoom() {
     canProceed: connectedPlayers().length >= MIN_PLAYERS,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
+    gameMinPlayers: GAME_MIN_PLAYERS,
   });
 }
 
@@ -213,11 +217,14 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "join") {
       if (role === "player") return;
-      const canJoinNow = room.phase === "lobby" && connectedPlayers().length < MAX_PLAYERS;
+      // No game is running during "select" either, so latecomers can still join
+      // as players — important now that a host can sit there alone.
+      const preGame = room.phase === "lobby" || room.phase === "select";
+      const canJoinNow = preGame && connectedPlayers().length < MAX_PLAYERS;
       if (!canJoinNow) {
         if (!playerId) {
           becomeSpectator(
-            room.phase !== "lobby"
+            !preGame
               ? "ゲーム進行中のため観戦モードで参加しました。"
               : "満員(最大4人)のため観戦モードで参加しました。"
           );
@@ -268,6 +275,11 @@ wss.on("connection", (ws) => {
       if (!isHost || room.phase !== "select") return;
       if (connectedPlayers().length < MIN_PLAYERS) return;
       const g = [1, 2, 3].includes(msg.game) ? msg.game : 1;
+      const need = GAME_MIN_PLAYERS[g];
+      if (connectedPlayers().length < need) {
+        send(ws, { type: "error", message: `このゲームは${need}人以上必要です。` });
+        return;
+      }
       startGame(g, { level: msg.level });
       return;
     }

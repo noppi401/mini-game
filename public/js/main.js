@@ -33,7 +33,9 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   const playerNames = {};
   let canProceed = false;
   let spectatorCount = 0;
-  let minPlayers = 2;
+  let minPlayers = 1;
+  let playerCount = 0;
+  let gameMinPlayers = { 1: 2, 2: 2, 3: 1 };
 
   let latestG1 = null;
   let latestG2 = null;
@@ -136,7 +138,9 @@ import * as PIXI from "./vendor/pixi.min.mjs";
         currentPhase = msg.phase;
         canProceed = !!msg.canProceed;
         spectatorCount = msg.spectatorCount || 0;
-        minPlayers = msg.minPlayers || 2;
+        minPlayers = msg.minPlayers || 1;
+        gameMinPlayers = msg.gameMinPlayers || gameMinPlayers;
+        playerCount = msg.players.filter((p) => p.connected).length;
         playerOrder = msg.players.map((p) => p.id);
         msg.players.forEach((p) => {
           playerNames[p.id] = p.name;
@@ -239,7 +243,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     } else if (isHost()) {
       wait.textContent = canProceed
         ? ""
-        : `あと${Math.max(0, minPlayers - msg.players.length)}人でゲーム選択に進めます`;
+        : `あと${Math.max(0, minPlayers - playerCount)}人でゲーム選択に進めます`;
     } else {
       wait.textContent = "ホストの開始を待っています…";
     }
@@ -250,7 +254,23 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const host = isHost();
     $("#game-choices").style.display = host && canProceed ? "flex" : "none";
     $("#mj-level").style.display = host && canProceed ? "block" : "none";
-    $("#select-few").style.display = host && !canProceed ? "block" : "none";
+
+    // Each game has its own minimum; mahjong seats CPUs so one human is enough.
+    const blocked = [];
+    document.querySelectorAll(".game-card").forEach((btn) => {
+      const game = Number(btn.dataset.game);
+      const need = gameMinPlayers[game] || 1;
+      const ok = playerCount >= need;
+      btn.disabled = !ok;
+      const req = btn.querySelector(".game-req");
+      if (req) req.textContent = ok ? "" : `${need}人以上で遊べます`;
+      if (!ok) blocked.push(btn.querySelector(".game-name").textContent);
+    });
+    const few = $("#select-few");
+    few.style.display = host && canProceed && blocked.length ? "block" : "none";
+    few.textContent = blocked.length
+      ? `${blocked.join(" / ")}は人数が足りません。ロビーに戻って募集してください。`
+      : "";
     $("#to-lobby-btn").style.display = host ? "inline-block" : "none";
     $("#select-wait").style.display = host ? "none" : "block";
     $("#select-wait").textContent = isPlayer()
