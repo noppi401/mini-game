@@ -281,3 +281,30 @@ code { background: #0d1119; padding: 1px 6px; border-radius: 5px; font-size: 12p
 }
 #mj-seat-left .mj-pond, #mj-seat-right .mj-pond { grid-template-columns: repeat(3, 18px); }
 #mj-seat-left .mj-melds, #mj-seat-right .mj-melds { flex-direction: column; }
+
+/* ===== Package B: timer, center sticks, highlights, richer result ===== */
+.hidden { display: none !important; }
+#mj-timer { width: 100%; max-width: 520px; height: 6px; margin: 8px auto 0; background: #1a2233; border-radius: 999px; overflow: hidden; }
+#mj-timer-fill { height: 100%; width: 100%; background: var(--primary); border-radius: 999px; transition: background .2s; }
+
+/* center info */
+#mj-center { color: #dfeee6; text-align: center; pointer-events: none; }
+.mjc-round { font-size: 18px; font-weight: 800; letter-spacing: .04em; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.mjc-sub { font-size: 11px; color: #bfe6d4; opacity: .9; }
+.mjc-sticks { display: flex; gap: 3px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
+.riichi-stick { width: 34px; height: 6px; background: #f4efe2; border-radius: 3px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.riichi-stick::after { content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; background: #d21b1b; border-radius: 50%; transform: translate(-50%,-50%); }
+
+/* last discard glow */
+.tile.last-discard { box-shadow: 0 0 0 2px #ffd166, 0 0 8px #ffd166; }
+.tile.called-dim { opacity: .4; }
+
+/* result card upgrades */
+.mj-result-card { animation: viewIn .25s ease; }
+.mj-result-card .wind { background:#1b2233; border-radius:4px; padding:0 5px; color:#ffd166; font-size: 13px; }
+.mj-from { color: #ff9b8f; font-size: 12px; font-weight: normal; }
+.mj-win-hand { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.mj-win-hand .tile.win-tile { box-shadow: 0 0 0 2px #37d67a, 0 0 8px #37d67a; transform: translateY(-3px); }
+.mj-meld-sep { width: 8px; }
+.mj-yaku-item { background: #232b3d; padding: 2px 8px; border-radius: 6px; }
+.mj-yaku-item b { color: var(--accent); }

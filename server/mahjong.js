@@ -15,6 +15,7 @@ const isAka = (id) => AKA_IDS.has(id);
 
 const START_SCORE = 25000;
 const RIICHI_COST = 1000;
+const TURN_LIMIT_MS = 30000; // human turn auto-discards after this
 const WIND_NAMES = ["東", "南", "西", "北"];
 const ROUND_WIND = C.WINDS.E; // 東風戦 → round wind always East
 
@@ -768,6 +769,7 @@ class Mahjong {
     if (this.phase === "playing") {
       const s = this.seats[this.turn];
       if (s.isCPU) {
+        this._turnStart = 0;
         if (nowMs - this._cpuTimer > 800) {
           this.cpuPlay(this.turn);
           this._cpuTimer = nowMs;
@@ -775,7 +777,17 @@ class Mahjong {
         }
       } else {
         this._cpuTimer = nowMs; // reset so CPU acts promptly when it becomes their turn
+        // human turn timeout → auto-discard the drawn tile (keeps the game moving)
+        const key = "p" + this.turn;
+        if (this._turnKey !== key) { this._turnKey = key; this._turnStart = nowMs; }
+        if (nowMs - this._turnStart > TURN_LIMIT_MS) {
+          this.doDiscard(this.turn, s.drawn != null ? s.drawn : s.hand[s.hand.length - 1], false);
+          this._turnStart = nowMs;
+          changed = true;
+        }
       }
+    } else {
+      this._turnKey = null;
     }
 
     if (this.phase === "callwait" && this.pending) {
@@ -845,6 +857,9 @@ class Mahjong {
       dealer: this.dealer,
       mySeat: viewerSeat,
       spectator: revealAll,
+      lastDiscardSeat: this.lastDiscard ? this.lastDiscard.seat : -1,
+      turnLimitSec: Math.round(TURN_LIMIT_MS / 1000),
+      callLimitSec: 8,
       seats,
       version: this.version,
     };

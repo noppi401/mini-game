@@ -1233,8 +1233,52 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     }
     flipHand(oldRects);
 
+    renderMjCenter(state);
     renderMjActions(state, actions);
+    manageTimer(state);
     renderMjOverlay(state);
+  }
+
+  function renderMjCenter(state) {
+    const el = $("#mj-center");
+    if (!el) return;
+    el.innerHTML = "";
+    const round = document.createElement("div"); round.className = "mjc-round"; round.textContent = state.roundLabel;
+    const sub = document.createElement("div"); sub.className = "mjc-sub"; sub.textContent = `${state.honba}本場 ・ 残り${state.wallRemaining}枚`;
+    el.appendChild(round); el.appendChild(sub);
+    if (state.riichiSticks > 0) {
+      const wrap = document.createElement("div"); wrap.className = "mjc-sticks";
+      for (let i = 0; i < state.riichiSticks; i++) { const s = document.createElement("div"); s.className = "riichi-stick"; wrap.appendChild(s); }
+      el.appendChild(wrap);
+    }
+  }
+
+  // ---- turn / call countdown ----
+  const mjTimer = { active: false, end: 0, dur: 0, key: null, raf: 0 };
+  function manageTimer(state) {
+    const el = $("#mj-timer");
+    let dur = 0, type = null;
+    if (state.mySeat >= 0 && !state.spectator && state.actions) {
+      if (state.phase === "playing" && state.turn === state.mySeat && (state.actions.canDiscard || state.actions.tsumo)) {
+        dur = state.turnLimitSec || 30; type = "turn";
+      } else if (state.actions.call) {
+        dur = state.callLimitSec || 8; type = "call";
+      }
+    }
+    if (!type) { mjTimer.active = false; el.classList.add("hidden"); return; }
+    const key = state.version + ":" + type;
+    if (mjTimer.key !== key) { mjTimer.key = key; mjTimer.end = performance.now() + dur * 1000; mjTimer.dur = dur; }
+    mjTimer.active = true; el.classList.remove("hidden");
+    if (!mjTimer.raf) tickTimer();
+  }
+  function tickTimer() {
+    const fill = $("#mj-timer-fill");
+    if (!mjTimer.active || !fill) { mjTimer.raf = 0; return; }
+    const remain = Math.max(0, mjTimer.end - performance.now());
+    const pct = mjTimer.dur ? (remain / (mjTimer.dur * 1000)) * 100 : 0;
+    fill.style.width = pct + "%";
+    fill.style.background = pct < 30 ? "#e0503b" : (pct < 60 ? "#ffd166" : "#4f7cff");
+    mjTimer.raf = requestAnimationFrame(tickTimer);
   }
 
   // ---- auto-sort (理牌) animation: tiles glide to their new sorted position ----
@@ -1310,8 +1354,11 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     // discard pond
     const pond = document.createElement("div");
     pond.className = "mj-pond";
-    (seat.discards || []).forEach((d) => {
-      pond.appendChild(tileEl(d, "small", { extra: d.riichi ? "riichi" : (d.called ? "called-dim" : "") }));
+    const discs = seat.discards || [];
+    const lastIdx = (state.lastDiscardSeat === seat.seat) ? discs.length - 1 : -1;
+    discs.forEach((d, i) => {
+      const extra = [d.riichi ? "riichi" : "", d.called ? "called-dim" : "", i === lastIdx ? "last-discard" : ""].filter(Boolean).join(" ");
+      pond.appendChild(tileEl(d, "small", { extra }));
     });
     box.appendChild(pond);
   }
@@ -1339,52 +1386,113 @@ import * as PIXI from "./vendor/pixi.min.mjs";
       (actions.ankan || []).forEach((k) => btn(`暗槓 ${tileKindName(k)}`, "", () => mjSend({ kind: "ankan", tile: k })));
       (actions.kakan || []).forEach((k) => btn(`加槓 ${tileKindName(k)}`, "", () => mjSend({ kind: "kakan", tile: k })));
     }
-    // call window
+    // call window — buttons show the tiles that would form the meld
     if (actions.call) {
       const c = actions.call;
-      if (c.ron) btn("ロン", "warn", () => mjSend({ kind: "ron" }));
-      if (c.pon) btn("ポン", "", () => mjSend({ kind: "pon" }));
-      if (c.kan) btn("カン", "", () => mjSend({ kind: "kan" }));
+      const ct = actions.callTile; // the discarded tile
+      const tileBtn = (label, cls, tiles, fn) => {
+        const b = document.createElement("button");
+        if (cls) b.className = cls;
+        const lab = document.createElement("span"); lab.textContent = label; lab.style.marginRight = "4px";
+        b.appendChild(lab);
+        (tiles || []).forEach((t) => b.appendChild(tileEl(t, "meld")));
+        b.addEventListener("click", fn); bar.appendChild(b); return b;
+      };
+      if (c.ron) tileBtn("ロン", "warn", ct ? [ct] : [], () => mjSend({ kind: "ron" }));
+      if (c.pon) tileBtn("ポン", "", ct ? [ct, ct, ct] : [], () => mjSend({ kind: "pon" }));
+      if (c.kan) tileBtn("カン", "", ct ? [ct, ct, ct, ct] : [], () => mjSend({ kind: "kan" }));
       if (c.chi) {
-        c.chi.forEach((pair) => btn(`チー ${pair.map(tileKindName).join("")}`, "", () => mjSend({ kind: "chi", tiles: pair })));
+        c.chi.forEach((pair) => {
+          const tiles = [kindToTileObj(pair[0]), kindToTileObj(pair[1]), ct].filter(Boolean)
+            .sort((a, b) => a.t - b.t);
+          tileBtn("チー", "", tiles, () => mjSend({ kind: "chi", tiles: pair }));
+        });
       }
-      btn("パス", "", () => mjSend({ kind: "pass" }));
+      btn("パス", "ghost", () => mjSend({ kind: "pass" }));
     }
   }
 
+  let mjOverlayKey = null;
   function renderMjOverlay(state) {
     const ov = $("#mj-overlay");
-    ov.innerHTML = "";
     const r = state.roundResult;
-    if (state.phase !== "roundend" || !r) return;
+    if (state.phase !== "roundend" || !r) { ov.innerHTML = ""; mjOverlayKey = null; return; }
+    // avoid rebuilding (and re-animating) on every state tick of the same result
+    const key = state.version + ":" + r.type + ":" + (r.winner != null ? r.winner : "d");
+    if (mjOverlayKey === key) return;
+    mjOverlayKey = key;
+    ov.innerHTML = "";
+
     const card = document.createElement("div");
     card.className = "mj-result-card";
-    let html = "";
+
     if (r.type === "draw") {
-      html += `<h3>流局</h3><div class="mj-yaku">聴牌: ${r.tenpai.map((t, i) => t ? state.seats[i].wind : null).filter(Boolean).join(" ") || "なし"}</div>`;
+      const h = document.createElement("h3"); h.textContent = "流局"; card.appendChild(h);
+      const tp = document.createElement("div"); tp.className = "mj-yaku";
+      tp.textContent = "聴牌: " + (r.tenpai.map((t, i) => t ? (state.seats[i].wind + (state.seats[i].name || "")) : null).filter(Boolean).join("、") || "なし");
+      card.appendChild(tp);
     } else {
+      const win = r.hands && r.hands[r.winner];
       const wname = escapeHtml(state.seats[r.winner].name || "CPU");
-      const via = r.type === "tsumo" ? "ツモ和了" : `ロン和了(放銃: ${escapeHtml(state.seats[r.loser].name || "CPU")})`;
-      html += `<h3>${wname} ${via}</h3>`;
-      const yakuStr = (r.yaku || []).map((y) => `${y.name}${y.han ? `<b>${y.han}</b>` : ""}`).join("　");
-      html += `<div class="mj-yaku">${yakuStr}</div>`;
-      const scoreLabel = r.yakuman ? "役満" : `${r.han}翻 ${r.fu}符`;
-      html += `<div class="mj-score-big">${scoreLabel} — ${r.points.total}点</div>`;
+      const via = r.type === "tsumo" ? "ツモ" : "ロン";
+      const h = document.createElement("h3");
+      h.innerHTML = `<span class="wind">${state.seats[r.winner].wind}</span> ${wname} ${via}和了` +
+        (r.type === "ron" ? ` <span class="mj-from">放銃: ${escapeHtml(state.seats[r.loser].name || "CPU")}</span>` : "");
+      card.appendChild(h);
+
+      // winning hand tiles (concealed + melds), winning tile highlighted
+      if (win) {
+        const hwrap = document.createElement("div"); hwrap.className = "mj-win-hand";
+        const winId = r.winTile ? r.winTile.id : null;
+        (win.hand || []).forEach((t) => hwrap.appendChild(tileEl(t, "meld", { extra: t.id === winId ? "win-tile" : "" })));
+        (win.melds || []).forEach((m) => {
+          const sep = document.createElement("span"); sep.className = "mj-meld-sep"; hwrap.appendChild(sep);
+          m.tiles.forEach((t) => hwrap.appendChild(tileEl(t, "meld")));
+        });
+        card.appendChild(hwrap);
+      }
+
+      const yk = document.createElement("div"); yk.className = "mj-yaku";
+      (r.yaku || []).forEach((y) => {
+        const s = document.createElement("span"); s.className = "mj-yaku-item";
+        s.innerHTML = `${escapeHtml(y.name)}${y.han ? ` <b>${y.han}</b>` : ""}`;
+        yk.appendChild(s);
+      });
+      card.appendChild(yk);
+
+      const big = document.createElement("div"); big.className = "mj-score-big";
+      big.textContent = (r.yakuman ? "役満" : `${r.han}翻 ${r.fu}符`) + ` ／ ${r.points.total}点`;
+      card.appendChild(big);
+
+      // dora / ura indicators
+      const drow = document.createElement("div"); drow.className = "mj-yaku";
+      drow.appendChild(document.createTextNode("ドラ表示 "));
+      (r.dora || []).forEach((t) => drow.appendChild(tileEl(t, "small")));
+      if (r.ura && r.ura.length) { drow.appendChild(document.createTextNode(" 裏 ")); (r.ura || []).forEach((t) => drow.appendChild(tileEl(t, "small"))); }
+      card.appendChild(drow);
     }
-    // deltas
-    html += `<div class="mj-deltas">` + (r.deltas || []).map((d, i) =>
-      `<span class="${d >= 0 ? "up" : "down"}">${escapeHtml(state.seats[i].name || "CPU")} ${d >= 0 ? "+" : ""}${d}</span>`).join("") + `</div>`;
-    card.innerHTML = html;
-    // dora / ura indicators row for wins
-    if (r.type !== "draw" && ((r.dora && r.dora.length) || (r.ura && r.ura.length))) {
-      const row = document.createElement("div");
-      row.className = "mj-yaku";
-      row.textContent = "ドラ表示:";
-      (r.dora || []).forEach((t) => row.appendChild(tileEl(t, "small")));
-      if (r.ura && r.ura.length) { const u = document.createElement("span"); u.textContent = "  裏:"; row.appendChild(u); (r.ura || []).forEach((t) => row.appendChild(tileEl(t, "small"))); }
-      card.appendChild(row);
-    }
+
+    // score deltas with count-up animation
+    const dwrap = document.createElement("div"); dwrap.className = "mj-deltas";
+    (r.deltas || []).forEach((d, i) => {
+      const span = document.createElement("span");
+      span.className = d > 0 ? "up" : (d < 0 ? "down" : "");
+      dwrap.appendChild(span);
+      animateDelta(span, state.seats[i].name || "CPU", d);
+    });
+    card.appendChild(dwrap);
     ov.appendChild(card);
+  }
+
+  function animateDelta(el, name, target) {
+    const dur = 600, t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const val = Math.round(target * p);
+      el.textContent = `${escapeHtml(name)} ${val >= 0 ? "+" : ""}${val}`;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   function renderMahjongResult(sel, result) {
