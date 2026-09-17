@@ -1222,6 +1222,16 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     doraBox.textContent = "ドラ:";
     (state.dora || []).forEach((t) => doraBox.appendChild(tileEl(t, "small")));
 
+    // tenpai / furiten status chip (viewer only)
+    const status = $("#mj-status");
+    if (state.furiten) { status.textContent = "フリテン"; status.className = "mj-chip status-furiten"; }
+    else if (state.tenpai) { status.textContent = "テンパイ"; status.className = "mj-chip status-tenpai"; }
+    else { status.textContent = ""; status.className = "mj-chip"; }
+
+    // live standings (rank by score)
+    const order = state.seats.map((s) => s.seat).sort((a, b) => state.seats[b].score - state.seats[a].score);
+    state._rank = {}; order.forEach((seat, i) => { state._rank[seat] = i + 1; });
+
     const actions = state.actions || null;
     if (!actions || !actions.riichiTiles) mjRiichiMode = false;
 
@@ -1316,19 +1326,15 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const riichiBadge = seat.riichi ? `<span class="riichi-badge">リーチ</span>` : "";
     const dealer = seat.isDealer ? `<span class="dealer">(親)</span>` : "";
     const youTag = seat.seat === state.mySeat ? "★" : "";
-    name.innerHTML = `<span class="wind">${seat.wind}</span>${dealer}<span>${escapeHtml(seat.name || (seat.isCPU ? "CPU" : "?"))}${youTag}</span><span class="score">${seat.score}</span>${riichiBadge}`;
+    const rank = state._rank ? `<span class="rank">${state._rank[seat.seat]}位</span>` : "";
+    name.innerHTML = `<span class="wind">${seat.wind}</span>${dealer}<span>${escapeHtml(seat.name || (seat.isCPU ? "CPU" : "?"))}${youTag}</span>${rank}<span class="score">${seat.score}</span>${riichiBadge}`;
     box.appendChild(name);
 
-    // melds
+    // melds (called tile shown sideways, positioned by who it came from)
     if (seat.melds && seat.melds.length) {
       const melds = document.createElement("div");
       melds.className = "mj-melds";
-      seat.melds.forEach((m) => {
-        const md = document.createElement("div");
-        md.className = "mj-meld";
-        m.tiles.forEach((t) => md.appendChild(tileEl(t, "meld", { extra: m.type === "ankan" ? "" : "" })));
-        melds.appendChild(md);
-      });
+      seat.melds.forEach((m) => melds.appendChild(buildMeld(m, seat.seat)));
       box.appendChild(melds);
     }
 
@@ -1358,10 +1364,26 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const discs = seat.discards || [];
     const lastIdx = (state.lastDiscardSeat === seat.seat) ? discs.length - 1 : -1;
     discs.forEach((d, i) => {
-      const extra = [d.riichi ? "riichi" : "", d.called ? "called-dim" : "", i === lastIdx ? "last-discard" : ""].filter(Boolean).join(" ");
+      const extra = [d.riichi ? "riichi" : "", d.called ? "called-dim" : "", i === lastIdx ? "last-discard" : "", d.tsumogiri ? "tsumogiri" : ""].filter(Boolean).join(" ");
       pond.appendChild(tileEl(d, "small", { extra }));
     });
     box.appendChild(pond);
+  }
+
+  // Build a meld with the called tile rotated sideways, placed by source seat.
+  function buildMeld(m, seatIndex) {
+    const md = document.createElement("div");
+    md.className = "mj-meld";
+    if (m.type === "ankan") { m.tiles.forEach((t) => md.appendChild(tileEl(t, "meld"))); return md; }
+    const rel = ((m.from - seatIndex) + 4) % 4; // 3=上家(左) 2=対面(中) 1=下家(右)
+    const others = m.tiles.filter((t) => t.id !== m.calledId);
+    const called = m.tiles.find((t) => t.id === m.calledId) || m.tiles[m.tiles.length - 1];
+    let seq;
+    if (rel === 3) seq = [["s", called], ...others.map((t) => ["u", t])];
+    else if (rel === 1) seq = [...others.map((t) => ["u", t]), ["s", called]];
+    else { seq = [["u", others[0]], ["s", called], ...others.slice(1).map((t) => ["u", t])]; }
+    seq.forEach(([o, t]) => { if (t) md.appendChild(tileEl(t, "meld", { extra: o === "s" ? "sideways" : "" })); });
+    return md;
   }
 
   function onDiscardTile(id) {
@@ -1428,7 +1450,15 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     card.className = "mj-result-card";
 
     if (r.type === "draw") {
-      const h = document.createElement("h3"); h.textContent = "流局"; card.appendChild(h);
+      const nagashiSeats = (r.nagashi || []).map((n, i) => n ? i : -1).filter((i) => i >= 0);
+      const h = document.createElement("h3");
+      h.textContent = nagashiSeats.length ? "流し満貫" : "流局";
+      card.appendChild(h);
+      if (nagashiSeats.length) {
+        const ng = document.createElement("div"); ng.className = "mj-yaku";
+        ng.textContent = "流し満貫: " + nagashiSeats.map((i) => state.seats[i].wind + (state.seats[i].name || "")).join("、");
+        card.appendChild(ng);
+      }
       const tp = document.createElement("div"); tp.className = "mj-yaku";
       tp.textContent = "聴牌: " + (r.tenpai.map((t, i) => t ? (state.seats[i].wind + (state.seats[i].name || "")) : null).filter(Boolean).join("、") || "なし");
       card.appendChild(tp);

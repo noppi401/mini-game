@@ -619,18 +619,36 @@ class Mahjong {
 
   // ---------- round / game end ----------
   endRoundDraw() {
-    // exhaustive draw: tenpai payments
     const tenpai = this.seats.map((s) => waitsFor(idsToCounts(s.hand), this.meldCount(s)).length > 0);
-    const nTen = tenpai.filter(Boolean).length;
     const deltas = [0, 0, 0, 0];
+
+    // 流し満貫: all of a player's discards are terminals/honors and none were called
+    const nagashi = this.seats.map((s) =>
+      s.discards.length > 0 && s.discards.every((d) => !d.called && C.isTerminalOrHonor(kindOf(d.id))));
+    if (nagashi.some(Boolean)) {
+      for (let p = 0; p < 4; p++) {
+        if (!nagashi[p]) continue;
+        const isD = p === this.dealer;
+        for (let i = 0; i < 4; i++) {
+          if (i === p) continue;
+          const amt = isD ? 4000 : (i === this.dealer ? 4000 : 2000);
+          deltas[i] -= amt; deltas[p] += amt;
+        }
+      }
+      this.applyScoreDeltas(deltas);
+      this.finishRound({ type: "draw", nagashi, tenpai, deltas, dealerKeeps: tenpai[this.dealer] || nagashi[this.dealer] });
+      return;
+    }
+
+    // exhaustive draw: tenpai (noten) payments
+    const nTen = tenpai.filter(Boolean).length;
     if (nTen > 0 && nTen < 4) {
       const gain = Math.floor(3000 / nTen);
       const loss = Math.floor(3000 / (4 - nTen));
       for (let i = 0; i < 4; i++) deltas[i] += tenpai[i] ? gain : -loss;
     }
     this.applyScoreDeltas(deltas);
-    const dealerTenpai = tenpai[this.dealer];
-    this.finishRound({ type: "draw", tenpai, deltas, dealerKeeps: dealerTenpai });
+    this.finishRound({ type: "draw", tenpai, deltas, dealerKeeps: tenpai[this.dealer] });
   }
 
   finishRound(result) {
@@ -897,6 +915,10 @@ class Mahjong {
         act.callTile = this.tileObj(this.pending.tileId);
       }
       state.actions = act;
+      // tenpai / furiten indicator for the viewer
+      const vwaits = waitsFor(idsToCounts(s.hand), this.meldCount(s));
+      state.tenpai = vwaits.length > 0;
+      state.furiten = state.tenpai && (s.furitenByDiscard || s.furiten || s.tempFuriten);
     }
 
     // round / game result payload
@@ -924,6 +946,7 @@ class Mahjong {
       out.ura = (r.ura || []).map((id) => this.tileObj(id));
     } else {
       out.tenpai = r.tenpai;
+      if (r.nagashi) out.nagashi = r.nagashi;
     }
     out.hands = (r.hands || []).map((h) => ({
       seat: h.seat,
