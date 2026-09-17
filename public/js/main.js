@@ -329,6 +329,38 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   g2canvas.addEventListener("pointercancel", g2press(false));
   g2canvas.addEventListener("pointerleave", g2press(false));
 
+  // On-screen accelerator button for game2 (mouse/touch parity with SHIFT).
+  const g2accel = $("#g2-accel");
+  if (g2accel) {
+    const set = (down) => (e) => {
+      e.preventDefault();
+      if (!isPlayer() || currentPhase !== "game2") return;
+      if (g2shift !== down) { g2shift = down; sendG2Input(); }
+      g2accel.classList.toggle("pressed", down);
+    };
+    g2accel.addEventListener("pointerdown", set(true));
+    g2accel.addEventListener("pointerup", set(false));
+    g2accel.addEventListener("pointercancel", set(false));
+    g2accel.addEventListener("pointerleave", set(false));
+  }
+
+  // On-screen D-pad + action buttons for game1 (full mouse/touch play).
+  function bindG1TouchControls() {
+    document.querySelectorAll("#g1-controls .touch-btn").forEach((btn) => {
+      const k = btn.dataset.k;
+      const set = (down) => (e) => {
+        e.preventDefault();
+        if (!isPlayer() || currentPhase !== "game1") return;
+        if (g1keys[k] !== down) { g1keys[k] = down; sendG1Input(); }
+        btn.classList.toggle("pressed", down);
+      };
+      btn.addEventListener("pointerdown", set(true));
+      btn.addEventListener("pointerup", set(false));
+      btn.addEventListener("pointercancel", set(false));
+      btn.addEventListener("pointerleave", set(false));
+    });
+  }
+
   // ---- buttons ----
   $("#join-btn").addEventListener("click", () => {
     const name = $("#name-input").value.trim() || "プレイヤー";
@@ -1408,6 +1440,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   // ---- boot ----
   showView("lobby");
   initMjReference();
+  bindG1TouchControls();
   connect();
   requestAnimationFrame(loop);
 })();

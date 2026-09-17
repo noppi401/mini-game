@@ -60,7 +60,19 @@
     <h1>ミニゲーム1:タンクバトル</h1>
     <div id="g1-hud"></div>
     <canvas id="g1-canvas" width="520" height="520"></canvas>
-    <p class="sub">矢印キー:移動 / SHIFT:ボム設置 / SPACE:発射</p>
+    <div id="g1-controls" class="touch-controls">
+      <div class="dpad">
+        <div class="touch-btn dpad-up" data-k="up">▲</div>
+        <div class="touch-btn dpad-left" data-k="left">◀</div>
+        <div class="touch-btn dpad-right" data-k="right">▶</div>
+        <div class="touch-btn dpad-down" data-k="down">▼</div>
+      </div>
+      <div class="action-btns">
+        <div class="touch-btn act bomb" data-k="shift">ボム</div>
+        <div class="touch-btn act fire" data-k="space">発射</div>
+      </div>
+    </div>
+    <p class="sub">矢印キー / 画面のパッド:移動　SHIFT・ボム:設置　SPACE・発射:弾</p>
   </section>
 
   <section id="view-result1" class="view">
@@ -77,7 +89,10 @@
       <canvas id="g2-canvas" width="560" height="360"></canvas>
       <canvas id="g2-tacho" width="220" height="220"></canvas>
     </div>
-    <p class="sub">SHIFTを押す:加速 / 離す:減速。右のタコメーターの針が赤いゾーン(コーナー限界)に入ったままコーナーへ進入するとスピンアウト。</p>
+    <div class="touch-controls">
+      <div id="g2-accel" class="touch-btn act accel">アクセル(押し続ける)</div>
+    </div>
+    <p class="sub">SHIFT・アクセルボタンを押す:加速 / 離す:減速。コース(キャンバス)長押しでも加速。針が赤いゾーンのままコーナーに入るとスピンアウト。</p>
   </section>
 
   <section id="view-result2" class="view">

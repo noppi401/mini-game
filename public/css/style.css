@@ -176,3 +176,30 @@ canvas {
 .mj-score-table th { background:#232b3d; color:#cdd6ea; }
 .mj-score-table td:first-child { background:#1c2233; color:#9fe0c0; font-weight:bold; }
 .mj-score-table .mangan td { color:#ffcf6b; }
+
+/* ===== On-screen touch/mouse controls (game1 dpad, game2 accel) ===== */
+.touch-controls {
+  display:flex; align-items:center; justify-content:center; gap:24px;
+  margin:10px auto 4px; max-width:520px; flex-wrap:wrap;
+}
+.touch-btn {
+  user-select:none; -webkit-user-select:none; touch-action:none; cursor:pointer;
+  background:#2a3346; color:#eef0f5; border:1px solid #3a4560; border-radius:10px;
+  display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700;
+}
+.touch-btn:hover { background:#354063; }
+.touch-btn.pressed { background:#4f7cff; border-color:#6a8fff; transform:scale(0.96); }
+.dpad {
+  display:grid; grid-template-columns:repeat(3, 54px); grid-template-rows:repeat(3, 54px); gap:4px;
+}
+.dpad-up { grid-column:2; grid-row:1; } .dpad-left { grid-column:1; grid-row:2; }
+.dpad-right { grid-column:3; grid-row:2; } .dpad-down { grid-column:2; grid-row:3; }
+.action-btns { display:flex; gap:10px; }
+.action-btns .act { width:74px; height:74px; border-radius:50%; font-size:15px; }
+.action-btns .bomb { background:#7a3a2a; border-color:#a05038; }
+.action-btns .bomb:hover { background:#94472f; }
+.action-btns .fire { background:#3a5a2a; border-color:#4f7a38; }
+.action-btns .fire:hover { background:#487033; }
+.act.accel { width:auto; padding:16px 26px; border-radius:12px; background:#27ae60; border-color:#2ecc71; }
+.act.accel:hover { background:#2ecc71; }
+.act.accel.pressed { background:#1e8f4e; }

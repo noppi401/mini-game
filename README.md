@@ -35,8 +35,10 @@ ngrok http 3000
 
 1. WebSocket接続(`ws://` or `wss://` を `location` から自動判定)
 2. ロビー・**ゲーム選択画面**・**観戦モード**・結果画面のUI制御(`join` / `spectate` / `to_select` / `to_lobby` / `pick` / `back_to_select`)
-3. ミニゲーム1: `#g1-canvas` に `game1_state` を描画、矢印キー/SHIFT/SPACE を `input` で送信
-4. ミニゲーム2: `#g2-canvas` に `game2_state` を描画(＋タコメーター `#g2-tacho`)、SHIFT押下/解放(＋モバイル向けにキャンバス長押し)を `input` で送信
+3. ミニゲーム1: `#g1-canvas` に `game1_state` を描画。矢印キー/SHIFT/SPACE、**または画面上の方向パッド＋ボム/発射ボタン**(マウス/タッチ)で操作
+4. ミニゲーム2: `#g2-canvas` に `game2_state` を描画(＋タコメーター `#g2-tacho`)。SHIFT、**または画面上のアクセルボタン/コース長押し**(マウス/タッチ)で加速
+
+※ 3ゲームとも**マウス/タッチだけで操作可能**です(キーボード任意)。
 5. ミニゲーム3(麻雀): `#mj-table` に `game3_state` を DOM で描画。手牌タップで打牌、鳴き・立直・和了はボタン。`{type:"mahjong", action:{...}}` で送信
 
 サーバー側メッセージ仕様は `server/index.js` を参照してください。
