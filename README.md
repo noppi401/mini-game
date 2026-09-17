@@ -27,13 +27,30 @@ npm install
 npm start
 ```
 
-http://localhost:3000 が起動します。外部共有する場合:
+http://localhost:3000 が起動します。
+
+### 外部共有(ngrok)
+
+ngrok は winget で導入できます(`winget install Ngrok.Ngrok`)。認証トークンは
+`ngrok config add-authtoken <token>` で一度登録すれば以降不要です。
+
+`~/AppData/Local/ngrok/ngrok.yml`(Windows)に名前付きトンネルを定義してあるので、
+サーバーを起動した状態で:
 
 ```bash
-ngrok http 3000
+ngrok start minigame
 ```
 
-発行されたURLを参加者に共有してください。
+アカウントの静的ドメインに固定しているため、再起動しても URL は変わりません。
+発行された `https://...ngrok-free.dev` を参加者に共有してください。
+クライアントは `location` から `wss://` を自動判定するため追加設定は不要です。
+
+注意点:
+
+- 無料プランでは初回アクセス時に ngrok の警告ページが出ます。参加者は
+  **「Visit Site」を一度押す**だけで通過できます。
+- サーバーに認証はありません。URL を知っていれば誰でも参加/観戦できるので、
+  遊ばないときは ngrok を停止してください。
 
 ## クライアント / 描画について
 
