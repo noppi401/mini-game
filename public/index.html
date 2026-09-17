@@ -45,6 +45,11 @@
         <span class="game-name">スロットカーレース</span>
         <span class="game-desc">コーナー速度を制する者が勝つ</span>
       </button>
+      <button class="game-card" data-game="3">
+        <span class="game-title">🀄 ミニゲーム3</span>
+        <span class="game-name">麻雀(東風戦)</span>
+        <span class="game-desc">赤ドラあり・4人打ち。空席はCPU</span>
+      </button>
     </div>
     <p id="select-few" class="sub" style="display:none;">人数が足りません(最低2人)。ロビーに戻って募集してください。</p>
     <p id="select-wait" class="sub" style="display:none;">ホストがゲームを選んでいます…</p>
@@ -80,6 +85,33 @@
     <ol id="result2-list" class="result-list"></ol>
     <button id="back2-btn" style="display:none;">選択画面へ戻る</button>
     <p id="back2-wait" class="sub">ホストの操作を待っています…</p>
+  </section>
+
+  <section id="view-game3" class="view">
+    <div id="mj-info">
+      <span id="mj-round" class="mj-chip"></span>
+      <span id="mj-honba" class="mj-chip"></span>
+      <span id="mj-wall" class="mj-chip"></span>
+      <span id="mj-dora" class="mj-chip"></span>
+      <span id="mj-riichi" class="mj-chip"></span>
+    </div>
+    <div id="mj-table">
+      <div id="mj-center"></div>
+      <div class="mj-seat" id="mj-seat-bottom"></div>
+      <div class="mj-seat" id="mj-seat-right"></div>
+      <div class="mj-seat" id="mj-seat-top"></div>
+      <div class="mj-seat" id="mj-seat-left"></div>
+    </div>
+    <div id="mj-actions"></div>
+    <div id="mj-overlay"></div>
+    <p class="sub" id="mj-hint">自分の手牌をタップして捨牌。鳴き・和了は表示されるボタンで。</p>
+  </section>
+
+  <section id="view-result3" class="view">
+    <h1>麻雀(東風戦) 最終結果</h1>
+    <ol id="result3-list" class="result-list"></ol>
+    <button id="back3-btn" style="display:none;">選択画面へ戻る</button>
+    <p id="back3-wait" class="sub">ホストの操作を待っています…</p>
   </section>
 
 </div>

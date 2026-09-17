@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 const { Game1 } = require("./game1");
 const { Game2 } = require("./game2");
+const { Mahjong } = require("./mahjong");
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 4;
@@ -46,7 +47,7 @@ const wss = new WebSocketServer({ server: httpServer });
 
 // ---- room state ----
 const room = {
-  phase: "lobby", // lobby | select | game1 | result1 | game2 | result2
+  phase: "lobby", // lobby | select | game1 | result1 | game2 | result2 | game3 | result3
   players: [], // ordered array of {id, name, ws, connected}
   spectators: [], // {id, ws}
   hostId: null,
@@ -54,6 +55,9 @@ const room = {
   result1: null, // {ranking:[{id,name,rank}]}
   game2: null,
   result2: null,
+  game3: null,   // Mahjong (東風戦)
+  result3: null,
+  _mjVersion: -1,
 };
 
 function send(ws, msg) {
@@ -109,10 +113,31 @@ function resetToLobby() {
   room.phase = "lobby";
   room.game1 = null;
   room.game2 = null;
+  room.game3 = null;
   room.result1 = null;
   room.result2 = null;
+  room.result3 = null;
   purgeDisconnected();
   broadcastRoom();
+}
+
+// Mahjong needs per-viewer state (each player sees their own hand; spectators
+// see everyone's), so it can't use the generic broadcast().
+function broadcastMahjong() {
+  const g = room.game3;
+  if (!g) return;
+  const fill = (state) => {
+    state.seats.forEach((seat) => { if (seat.playerId) seat.name = nameFor(seat.playerId); });
+    return state;
+  };
+  for (const p of room.players) {
+    if (!p.connected) continue;
+    send(p.ws, { type: "game3_state", state: fill(g.serializeFor(p.id, false)) });
+  }
+  for (const sp of room.spectators) {
+    send(sp.ws, { type: "game3_state", state: fill(g.serializeFor(null, true)) });
+  }
+  room._mjVersion = g.version;
 }
 
 // If a game/result is active but nobody is left to play, return to the lobby
@@ -133,14 +158,21 @@ function buildResult(ranking) {
 
 function startGame(n) {
   const ids = connectedPlayers().map((p) => p.id);
-  if (n === 2) {
+  if (n === 3) {
+    room.game3 = new Mahjong(ids.slice(0, 4)); // empty seats become CPU
+    room.phase = "game3";
+    room._mjVersion = -1;
+    broadcast({ type: "phase", phase: room.phase });
+    broadcastMahjong();
+  } else if (n === 2) {
     room.game2 = new Game2(ids);
     room.phase = "game2";
+    broadcast({ type: "phase", phase: room.phase });
   } else {
     room.game1 = new Game1(ids);
     room.phase = "game1";
+    broadcast({ type: "phase", phase: room.phase });
   }
-  broadcast({ type: "phase", phase: room.phase });
 }
 
 wss.on("connection", (ws) => {
@@ -156,10 +188,17 @@ wss.on("connection", (ws) => {
     // Nudge the freshly-arrived spectator to the current live view.
     if (room.phase === "game1" || room.phase === "game2") {
       send(ws, { type: "phase", phase: room.phase });
+    } else if (room.phase === "game3" && room.game3) {
+      send(ws, { type: "phase", phase: "game3" });
+      const st = room.game3.serializeFor(null, true);
+      st.seats.forEach((seat) => { if (seat.playerId) seat.name = nameFor(seat.playerId); });
+      send(ws, { type: "game3_state", state: st });
     } else if (room.phase === "result1" && room.result1) {
       send(ws, { type: "result1", result: room.result1 });
     } else if (room.phase === "result2" && room.result2) {
       send(ws, { type: "result2", result: room.result2 });
+    } else if (room.phase === "result3" && room.result3) {
+      send(ws, { type: "result3", result: room.result3 });
     }
     if (reason) send(ws, { type: "error", message: reason });
   }
@@ -228,7 +267,13 @@ wss.on("connection", (ws) => {
     if (msg.type === "pick") {
       if (!isHost || room.phase !== "select") return;
       if (connectedPlayers().length < MIN_PLAYERS) return;
-      startGame(msg.game === 2 ? 2 : 1);
+      const g = [1, 2, 3].includes(msg.game) ? msg.game : 1;
+      startGame(g);
+      return;
+    }
+
+    if (msg.type === "mahjong" && room.phase === "game3" && room.game3) {
+      if (room.game3.handleAction(playerId, msg.action)) broadcastMahjong();
       return;
     }
 
@@ -244,11 +289,13 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "back_to_select") {
       if (!isHost) return;
-      if (room.phase !== "result1" && room.phase !== "result2") return;
+      if (!["result1", "result2", "result3"].includes(room.phase)) return;
       room.game1 = null;
       room.game2 = null;
+      room.game3 = null;
       room.result1 = null;
       room.result2 = null;
+      room.result3 = null;
       purgeDisconnected();
       // Not enough players remain to start another game → drop back to the lobby.
       room.phase = connectedPlayers().length >= MIN_PLAYERS ? "select" : "lobby";
@@ -280,8 +327,10 @@ wss.on("connection", (ws) => {
     } else {
       // During a running game / result: keep the slot (game finishes on its own),
       // but make sure a connected player is host and the room isn't abandoned.
+      // For mahjong, hand the seat to the CPU so the table keeps playing.
+      if (room.phase === "game3" && room.game3) room.game3.dropPlayer(playerId);
       ensureHost();
-      if (!abandonIfEmpty()) broadcastRoom();
+      if (!abandonIfEmpty()) { broadcastRoom(); if (room.phase === "game3") broadcastMahjong(); }
     }
   });
 });
@@ -309,6 +358,19 @@ setInterval(() => {
       room.result2 = buildResult(room.game2.ranking);
       room.phase = "result2";
       broadcast({ type: "result2", result: room.result2 });
+      broadcastRoom();
+    }
+  } else if (room.phase === "game3" && room.game3) {
+    room.game3.tick(now);
+    if (room.game3.version !== room._mjVersion) broadcastMahjong();
+    if (room.game3.finished) {
+      const ranking = room.game3.result.ranking.map((r) => ({
+        id: r.playerId, name: r.playerId ? nameFor(r.playerId) : "CPU",
+        rank: r.rank, score: r.score, isCPU: r.isCPU,
+      }));
+      room.result3 = { ranking };
+      room.phase = "result3";
+      broadcast({ type: "result3", result: room.result3 });
       broadcastRoom();
     }
   }

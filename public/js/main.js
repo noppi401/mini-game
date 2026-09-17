@@ -37,6 +37,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
 
   let latestG1 = null;
   let latestG2 = null;
+  let latestMj = null;
 
   // ---- DOM helpers ----
   const $ = (sel) => document.querySelector(sel);
@@ -47,6 +48,8 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     result1: $("#view-result1"),
     game2: $("#view-game2"),
     result2: $("#view-result2"),
+    game3: $("#view-game3"),
+    result3: $("#view-result3"),
   };
 
   function showView(name) {
@@ -133,7 +136,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
         } else if (msg.phase === "select") {
           renderSelect();
           showView("select");
-        } else if (msg.phase === "result1" || msg.phase === "result2") {
+        } else if (msg.phase === "result1" || msg.phase === "result2" || msg.phase === "result3") {
           refreshResultButtons(msg.phase);
         }
         break;
@@ -142,6 +145,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
         currentPhase = msg.phase;
         if (msg.phase === "game1") { ensureG1(); showView("game1"); }
         else if (msg.phase === "game2") { ensureG2(); showView("game2"); }
+        else if (msg.phase === "game3") { showView("game3"); }
         break;
 
       case "game1_state":
@@ -168,6 +172,20 @@ import * as PIXI from "./vendor/pixi.min.mjs";
         renderResult("#result2-list", msg);
         refreshResultButtons("result2");
         showView("result2");
+        break;
+
+      case "game3_state":
+        latestMj = msg.state;
+        currentPhase = "game3";
+        renderMahjong(msg.state);
+        showView("game3");
+        break;
+
+      case "result3":
+        currentPhase = "result3";
+        renderMahjongResult("#result3-list", msg.result);
+        refreshResultButtons("result3");
+        showView("result3");
         break;
 
       case "error":
@@ -241,7 +259,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   }
 
   function refreshResultButtons(phase) {
-    const n = phase === "result2" ? "2" : "1";
+    const n = phase === "result3" ? "3" : phase === "result2" ? "2" : "1";
     $(`#back${n}-btn`).style.display = isHost() ? "inline-block" : "none";
     $(`#back${n}-wait`).style.display = isHost() ? "none" : "block";
   }
@@ -327,6 +345,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
   });
   $("#back1-btn").addEventListener("click", () => sendMsg({ type: "back_to_select" }));
   $("#back2-btn").addEventListener("click", () => sendMsg({ type: "back_to_select" }));
+  $("#back3-btn").addEventListener("click", () => sendMsg({ type: "back_to_select" }));
 
   // =====================================================================
   //  Detailed vector sprites (Canvas 2D) — used to pre-render GPU textures
@@ -1077,6 +1096,197 @@ import * as PIXI from "./vendor/pixi.min.mjs";
       html += `<span class="hud-chip" style="color:${colorForId(id)}">${escapeHtml(nameForId(id))} ${laps}/${s.lapsToWin}周 ${flag}</span>`;
     });
     $("#g2-hud").innerHTML = html;
+  }
+
+  // =====================================================================
+  //  Mahjong (game3) — DOM rendering + interaction
+  // =====================================================================
+  const MJ_SUITCHAR = ["萬", "筒", "索"];
+  const MJ_HONOR = ["東", "南", "西", "北", "白", "發", "中"];
+  let mjRiichiMode = false;
+
+  function mjSend(action) { sendMsg({ type: "mahjong", action }); }
+
+  function tileFace(t) {
+    const k = t.t;
+    if (k < 27) {
+      const suit = Math.floor(k / 9), num = (k % 9) + 1;
+      return { cls: ["man", "pin", "sou"][suit] + (t.a ? " aka" : ""), n: String(num), s: MJ_SUITCHAR[suit] };
+    }
+    return { cls: "honor", n: MJ_HONOR[k - 27], s: "" };
+  }
+  function tileEl(t, size, opts = {}) {
+    const f = tileFace(t);
+    const el = document.createElement(opts.click ? "button" : "div");
+    el.className = `tile ${size} ${f.cls}${opts.click ? " clickable" : ""}${opts.extra ? " " + opts.extra : ""}`;
+    el.innerHTML = `<span class="n">${f.n}</span>` + (f.s ? `<span class="s">${f.s}</span>` : "");
+    if (opts.click) el.addEventListener("click", opts.click);
+    return el;
+  }
+  function backEl(size) { const d = document.createElement("div"); d.className = `tile ${size} back`; return d; }
+  function kindToTileObj(k) { return { t: k, a: 0 }; }
+  function tileKindName(k) {
+    if (k < 27) return ((k % 9) + 1) + MJ_SUITCHAR[Math.floor(k / 9)];
+    return MJ_HONOR[k - 27];
+  }
+
+  function renderMahjong(state) {
+    // info bar
+    $("#mj-round").textContent = `${state.roundLabel}`;
+    $("#mj-honba").textContent = `${state.honba}本場`;
+    $("#mj-wall").textContent = `残り${state.wallRemaining}`;
+    $("#mj-riichi").textContent = state.riichiSticks ? `供託${state.riichiSticks}` : "";
+    const doraBox = $("#mj-dora");
+    doraBox.textContent = "ドラ:";
+    (state.dora || []).forEach((t) => doraBox.appendChild(tileEl(t, "small")));
+
+    const actions = state.actions || null;
+    if (!actions || !actions.riichiTiles) mjRiichiMode = false;
+
+    const base = state.mySeat >= 0 ? state.mySeat : 0;
+    const pos = { bottom: base, right: (base + 1) % 4, top: (base + 2) % 4, left: (base + 3) % 4 };
+    for (const [posName, seatIdx] of Object.entries(pos)) {
+      renderSeat($(`#mj-seat-${posName}`), state.seats[seatIdx], state, posName === "bottom");
+    }
+
+    renderMjActions(state, actions);
+    renderMjOverlay(state);
+  }
+
+  function renderSeat(box, seat, state, isBottom) {
+    box.innerHTML = "";
+    box.classList.toggle("mj-turn", state.turn === seat.seat && state.phase === "playing");
+
+    const name = document.createElement("div");
+    name.className = "mj-nameline";
+    const riichiBadge = seat.riichi ? `<span class="riichi-badge">リーチ</span>` : "";
+    const dealer = seat.isDealer ? `<span class="dealer">(親)</span>` : "";
+    const youTag = seat.seat === state.mySeat ? "★" : "";
+    name.innerHTML = `<span class="wind">${seat.wind}</span>${dealer}<span>${escapeHtml(seat.name || (seat.isCPU ? "CPU" : "?"))}${youTag}</span><span class="score">${seat.score}</span>${riichiBadge}`;
+    box.appendChild(name);
+
+    // melds
+    if (seat.melds && seat.melds.length) {
+      const melds = document.createElement("div");
+      melds.className = "mj-melds";
+      seat.melds.forEach((m) => {
+        const md = document.createElement("div");
+        md.className = "mj-meld";
+        m.tiles.forEach((t) => md.appendChild(tileEl(t, "meld", { extra: m.type === "ankan" ? "" : "" })));
+        melds.appendChild(md);
+      });
+      box.appendChild(melds);
+    }
+
+    // hand
+    const hand = document.createElement("div");
+    hand.className = "mj-hand" + (isBottom ? " mine" : "");
+    const canDiscard = isBottom && seat.seat === state.mySeat && state.actions && state.actions.canDiscard;
+    if (seat.hand) {
+      const riichiSet = new Set((state.actions && state.actions.riichiTiles) || []);
+      seat.hand.forEach((t) => {
+        const clickable = canDiscard && (!mjRiichiMode || riichiSet.has(t.id));
+        hand.appendChild(tileEl(t, isBottom ? "hand" : "small", clickable ? { click: () => onDiscardTile(t.id) } : {}));
+      });
+      if (seat.drawn) {
+        const clickable = canDiscard && (!mjRiichiMode || riichiSet.has(seat.drawn.id));
+        hand.appendChild(tileEl(seat.drawn, isBottom ? "hand" : "small", { extra: "drawn", ...(clickable ? { click: () => onDiscardTile(seat.drawn.id) } : {}) }));
+      }
+    } else {
+      for (let i = 0; i < seat.handCount; i++) hand.appendChild(backEl("small"));
+      if (seat.hasDrawn) { const b = backEl("small"); b.classList.add("drawn"); hand.appendChild(b); }
+    }
+    box.appendChild(hand);
+
+    // discard pond
+    const pond = document.createElement("div");
+    pond.className = "mj-pond";
+    (seat.discards || []).forEach((d) => {
+      pond.appendChild(tileEl(d, "small", { extra: d.riichi ? "riichi" : (d.called ? "called-dim" : "") }));
+    });
+    box.appendChild(pond);
+  }
+
+  function onDiscardTile(id) {
+    if (mjRiichiMode) { mjSend({ kind: "riichi", tile: id }); mjRiichiMode = false; }
+    else mjSend({ kind: "discard", tile: id });
+  }
+
+  function renderMjActions(state, actions) {
+    const bar = $("#mj-actions");
+    bar.innerHTML = "";
+    if (!actions) return;
+    const btn = (label, cls, fn) => {
+      const b = document.createElement("button");
+      b.textContent = label; if (cls) b.className = cls;
+      b.addEventListener("click", fn); bar.appendChild(b); return b;
+    };
+    // on your turn
+    if (state.turn === state.mySeat && state.phase === "playing") {
+      if (actions.tsumo) btn("ツモ", "good", () => mjSend({ kind: "tsumo" }));
+      if (actions.riichiTiles && actions.riichiTiles.length) {
+        btn(mjRiichiMode ? "リーチ取消" : "リーチ", "", () => { mjRiichiMode = !mjRiichiMode; renderMahjong(state); });
+      }
+      (actions.ankan || []).forEach((k) => btn(`暗槓 ${tileKindName(k)}`, "", () => mjSend({ kind: "ankan", tile: k })));
+      (actions.kakan || []).forEach((k) => btn(`加槓 ${tileKindName(k)}`, "", () => mjSend({ kind: "kakan", tile: k })));
+    }
+    // call window
+    if (actions.call) {
+      const c = actions.call;
+      if (c.ron) btn("ロン", "warn", () => mjSend({ kind: "ron" }));
+      if (c.pon) btn("ポン", "", () => mjSend({ kind: "pon" }));
+      if (c.kan) btn("カン", "", () => mjSend({ kind: "kan" }));
+      if (c.chi) {
+        c.chi.forEach((pair) => btn(`チー ${pair.map(tileKindName).join("")}`, "", () => mjSend({ kind: "chi", tiles: pair })));
+      }
+      btn("パス", "", () => mjSend({ kind: "pass" }));
+    }
+  }
+
+  function renderMjOverlay(state) {
+    const ov = $("#mj-overlay");
+    ov.innerHTML = "";
+    const r = state.roundResult;
+    if (state.phase !== "roundend" || !r) return;
+    const card = document.createElement("div");
+    card.className = "mj-result-card";
+    let html = "";
+    if (r.type === "draw") {
+      html += `<h3>流局</h3><div class="mj-yaku">聴牌: ${r.tenpai.map((t, i) => t ? state.seats[i].wind : null).filter(Boolean).join(" ") || "なし"}</div>`;
+    } else {
+      const wname = escapeHtml(state.seats[r.winner].name || "CPU");
+      const via = r.type === "tsumo" ? "ツモ和了" : `ロン和了(放銃: ${escapeHtml(state.seats[r.loser].name || "CPU")})`;
+      html += `<h3>${wname} ${via}</h3>`;
+      const yakuStr = (r.yaku || []).map((y) => `${y.name}${y.han ? `<b>${y.han}</b>` : ""}`).join("　");
+      html += `<div class="mj-yaku">${yakuStr}</div>`;
+      const scoreLabel = r.yakuman ? "役満" : `${r.han}翻 ${r.fu}符`;
+      html += `<div class="mj-score-big">${scoreLabel} — ${r.points.total}点</div>`;
+    }
+    // deltas
+    html += `<div class="mj-deltas">` + (r.deltas || []).map((d, i) =>
+      `<span class="${d >= 0 ? "up" : "down"}">${escapeHtml(state.seats[i].name || "CPU")} ${d >= 0 ? "+" : ""}${d}</span>`).join("") + `</div>`;
+    card.innerHTML = html;
+    // dora / ura indicators row for wins
+    if (r.type !== "draw" && ((r.dora && r.dora.length) || (r.ura && r.ura.length))) {
+      const row = document.createElement("div");
+      row.className = "mj-yaku";
+      row.textContent = "ドラ表示:";
+      (r.dora || []).forEach((t) => row.appendChild(tileEl(t, "small")));
+      if (r.ura && r.ura.length) { const u = document.createElement("span"); u.textContent = "  裏:"; row.appendChild(u); (r.ura || []).forEach((t) => row.appendChild(tileEl(t, "small"))); }
+      card.appendChild(row);
+    }
+    ov.appendChild(card);
+  }
+
+  function renderMahjongResult(sel, result) {
+    const list = $(sel);
+    list.innerHTML = "";
+    (result.ranking || []).forEach((r) => {
+      const li = document.createElement("li");
+      const medal = ["🥇", "🥈", "🥉"][r.rank - 1] || `${r.rank}位`;
+      li.innerHTML = `${medal} ${escapeHtml(r.name)}${r.isCPU ? "(CPU)" : ""} — ${r.score}点`;
+      list.appendChild(li);
+    });
   }
 
   // ---- renderer lifecycle ----
