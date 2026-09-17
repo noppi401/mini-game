@@ -308,3 +308,24 @@ code { background: #0d1119; padding: 1px 6px; border-radius: 5px; font-size: 12p
 .mj-meld-sep { width: 8px; }
 .mj-yaku-item { background: #232b3d; padding: 2px 8px; border-radius: 6px; }
 .mj-yaku-item b { color: var(--accent); }
+
+/* ===== Package D: mute button + start/win banner ===== */
+#mute-btn {
+  position: fixed; top: 8px; left: 10px; z-index: 40;
+  background: rgba(20,24,34,0.8); border: 1px solid var(--line); color: var(--text);
+  padding: 4px 10px; border-radius: 999px; font-size: 14px; box-shadow: none; backdrop-filter: blur(4px);
+}
+#mute-btn:hover { background: var(--surface2); filter: none; }
+#banner {
+  position: fixed; top: 34%; left: 50%; transform: translate(-50%,-50%) scale(0.8);
+  z-index: 60; pointer-events: none; opacity: 0;
+  font-size: 44px; font-weight: 900; letter-spacing: .06em; color: #fff;
+  text-shadow: 0 3px 14px rgba(0,0,0,.6), 0 0 20px rgba(79,124,255,.6);
+}
+#banner.show { animation: bannerPop 1.1s ease forwards; }
+@keyframes bannerPop {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(0.6); }
+  20% { opacity: 1; transform: translate(-50%,-50%) scale(1.05); }
+  70% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(1); }
+}

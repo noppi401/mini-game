@@ -154,9 +154,9 @@ import * as PIXI from "./vendor/pixi.min.mjs";
 
       case "phase":
         currentPhase = msg.phase;
-        if (msg.phase === "game1") { ensureG1(); showView("game1"); }
-        else if (msg.phase === "game2") { ensureG2(); showView("game2"); }
-        else if (msg.phase === "game3") { showView("game3"); }
+        if (msg.phase === "game1") { ensureG1(); showView("game1"); showBanner("スタート!"); playSfx("start"); }
+        else if (msg.phase === "game2") { ensureG2(); showView("game2"); showBanner("スタート!"); playSfx("start"); }
+        else if (msg.phase === "game3") { showView("game3"); showBanner("対局開始"); playSfx("start"); }
         break;
 
       case "game1_state":
@@ -189,6 +189,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
         latestMj = msg.state;
         currentPhase = "game3";
         renderMahjong(msg.state);
+        mjSounds(msg.state);
         showView("game3");
         break;
 
@@ -1629,11 +1630,82 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     }
   }
 
+  // ---- sound (WebAudio, no external assets) + effects ----
+  let audioCtx = null, muted = false;
+  try { muted = localStorage.getItem("mg-muted") === "1"; } catch {}
+  function ensureAudio() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, t0, dur, type = "sine", gain = 0.18) {
+    const c = audioCtx; if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq; o.connect(g); g.connect(c.destination);
+    const t = c.currentTime + t0;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.03);
+  }
+  const SFX = {
+    discard: () => tone(300, 0, 0.08, "triangle", 0.14),
+    turn: () => tone(680, 0, 0.12, "sine", 0.16),
+    riichi: () => { tone(520, 0, 0.12, "square", 0.11); tone(784, 0.12, 0.16, "square", 0.11); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.22, "sawtooth", 0.13)),
+    lose: () => { tone(220, 0, 0.3, "sine", 0.15); tone(150, 0.16, 0.35, "sine", 0.15); },
+    round: () => tone(440, 0, 0.18, "sine", 0.12),
+    start: () => { tone(392, 0, 0.12, "square", 0.12); tone(587, 0.12, 0.2, "square", 0.12); },
+  };
+  function playSfx(name) { if (muted) return; if (!ensureAudio()) return; const fn = SFX[name]; if (fn) fn(); }
+  function updateMuteBtn() { const b = $("#mute-btn"); if (b) b.textContent = muted ? "🔇" : "🔊"; }
+  function initSound() {
+    updateMuteBtn();
+    const b = $("#mute-btn");
+    if (b) b.addEventListener("click", () => {
+      muted = !muted; try { localStorage.setItem("mg-muted", muted ? "1" : "0"); } catch {}
+      updateMuteBtn(); if (!muted) playSfx("turn");
+    });
+    document.addEventListener("pointerdown", () => ensureAudio(), { once: true });
+  }
+  function vibrate(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} }
+
+  function showBanner(text) {
+    const el = $("#banner");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+  }
+
+  // mahjong event sounds (diff against previous state)
+  const _mjPrev = { turn: -1, disc: -1, roundKey: null, riichi: 0, phase: null };
+  function mjSounds(state) {
+    const discTotal = state.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
+    const riichiCount = state.seats.filter((s) => s.riichi).length;
+    if (_mjPrev.disc >= 0 && discTotal > _mjPrev.disc) playSfx("discard");
+    if (riichiCount > _mjPrev.riichi) playSfx("riichi");
+    if (state.mySeat >= 0 && state.phase === "playing" && state.turn === state.mySeat && _mjPrev.turn !== state.turn) {
+      playSfx("turn"); vibrate(60);
+    }
+    if (state.phase === "roundend" && state.roundResult) {
+      const r = state.roundResult, key = state.version + ":" + r.type;
+      if (_mjPrev.roundKey !== key) {
+        if (r.type === "draw") playSfx("round");
+        else if (r.winner === state.mySeat) { playSfx("win"); vibrate([60, 40, 120]); }
+        else if (r.loser === state.mySeat) playSfx("lose");
+        else playSfx("round");
+        _mjPrev.roundKey = key;
+      }
+    }
+    _mjPrev.turn = state.turn; _mjPrev.disc = discTotal; _mjPrev.riichi = riichiCount; _mjPrev.phase = state.phase;
+  }
+
   // ---- boot ----
   showView("lobby");
   initMjReference();
   bindG1TouchControls();
   initShare();
+  initSound();
   connect();
   requestAnimationFrame(loop);
 })();
