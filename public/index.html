@@ -9,6 +9,8 @@
 <body>
 <div id="app">
 
+  <div id="conn-status" class="conn connecting"><span class="dot"></span><span id="conn-text">接続中…</span></div>
+
   <div id="spectator-banner">👁 観戦中</div>
 
   <section id="view-lobby" class="view">
@@ -19,6 +21,13 @@
       <input id="name-input" type="text" maxlength="16" placeholder="ニックネーム" />
       <button id="join-btn">参加する</button>
       <button id="spectate-btn" class="ghost">観戦する</button>
+    </div>
+
+    <div id="share-box">
+      <button id="copy-url" class="ghost">🔗 招待URLをコピー</button>
+      <span id="copy-done" class="sub"></span>
+      <div id="qr-box" title="スマホでスキャンして参加"></div>
+      <p class="sub">同じネットワーク外へ共有するには <code>ngrok http 3000</code> のURLを使ってください。</p>
     </div>
 
     <div id="player-list-box" style="display:none;">
@@ -145,6 +154,7 @@
   </div>
 
 </div>
+<script src="js/vendor/qrcode.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

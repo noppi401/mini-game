@@ -85,8 +85,10 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${proto}//${location.host}`);
 
+    setConn("connecting", "接続中…");
     ws.addEventListener("open", () => {
       $("#error-msg").textContent = "";
+      setConn("online", "オンライン");
     });
     ws.addEventListener("message", (ev) => {
       let msg;
@@ -99,10 +101,19 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     });
     ws.addEventListener("close", () => {
       $("#error-msg").textContent = "接続が切れました。再読み込みしてください。";
+      setConn("offline", "切断されました");
     });
     ws.addEventListener("error", () => {
       $("#error-msg").textContent = "接続エラーが発生しました。";
+      setConn("offline", "接続エラー");
     });
+  }
+
+  function setConn(state, text) {
+    const el = $("#conn-status");
+    if (!el) return;
+    el.className = "conn " + state;
+    $("#conn-text").textContent = text;
   }
 
   function sendMsg(obj) {
@@ -1437,10 +1448,47 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     requestAnimationFrame(loop);
   }
 
+  // ---- share: copy URL + QR ----
+  function initShare() {
+    const copyBtn = $("#copy-url");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const url = location.href;
+        try {
+          await navigator.clipboard.writeText(url);
+          $("#copy-done").textContent = "コピーしました ✓";
+        } catch {
+          // fallback: temporary textarea
+          const ta = document.createElement("textarea");
+          ta.value = url; document.body.appendChild(ta); ta.select();
+          try { document.execCommand("copy"); $("#copy-done").textContent = "コピーしました ✓"; }
+          catch { $("#copy-done").textContent = url; }
+          ta.remove();
+        }
+        setTimeout(() => { $("#copy-done").textContent = ""; }, 2500);
+      });
+    }
+    // QR code of the current URL (uses vendored qrcode-generator on window.qrcode)
+    const box = $("#qr-box");
+    if (box && typeof window.qrcode === "function") {
+      try {
+        const qr = window.qrcode(0, "M");
+        qr.addData(location.href);
+        qr.make();
+        box.innerHTML = qr.createImgTag(4, 8);
+        const img = box.querySelector("img");
+        if (img) { img.style.width = "168px"; img.style.height = "168px"; img.alt = "参加用QR"; }
+      } catch { box.style.display = "none"; }
+    } else if (box) {
+      box.style.display = "none";
+    }
+  }
+
   // ---- boot ----
   showView("lobby");
   initMjReference();
   bindG1TouchControls();
+  initShare();
   connect();
   requestAnimationFrame(loop);
 })();
