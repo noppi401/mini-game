@@ -1120,6 +1120,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     const el = document.createElement(opts.click ? "button" : "div");
     el.className = `tile ${size} ${f.cls}${opts.click ? " clickable" : ""}${opts.extra ? " " + opts.extra : ""}`;
     el.innerHTML = `<span class="n">${f.n}</span>` + (f.s ? `<span class="s">${f.s}</span>` : "");
+    if (opts.id != null) el.dataset.id = opts.id;
     if (opts.click) el.addEventListener("click", opts.click);
     return el;
   }
@@ -1145,12 +1146,40 @@ import * as PIXI from "./vendor/pixi.min.mjs";
 
     const base = state.mySeat >= 0 ? state.mySeat : 0;
     const pos = { bottom: base, right: (base + 1) % 4, top: (base + 2) % 4, left: (base + 3) % 4 };
+    // capture own-hand tile positions before re-render for the auto-sort (FLIP) animation
+    const oldRects = captureHandRects();
     for (const [posName, seatIdx] of Object.entries(pos)) {
       renderSeat($(`#mj-seat-${posName}`), state.seats[seatIdx], state, posName === "bottom");
     }
+    flipHand(oldRects);
 
     renderMjActions(state, actions);
     renderMjOverlay(state);
+  }
+
+  // ---- auto-sort (理牌) animation: tiles glide to their new sorted position ----
+  function captureHandRects() {
+    const map = new Map();
+    document.querySelectorAll("#mj-seat-bottom .mj-hand .tile").forEach((el) => {
+      if (el.dataset.id != null) map.set(el.dataset.id, el.getBoundingClientRect());
+    });
+    return map;
+  }
+  function flipHand(oldRects) {
+    if (!oldRects || oldRects.size === 0) return;
+    document.querySelectorAll("#mj-seat-bottom .mj-hand .tile").forEach((el) => {
+      const id = el.dataset.id;
+      if (id == null || !oldRects.has(id)) return;
+      const oldR = oldRects.get(id), newR = el.getBoundingClientRect();
+      const dx = oldR.left - newR.left, dy = oldR.top - newR.top;
+      if (!dx && !dy) return;
+      el.style.transition = "none";
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = "transform .18s ease";
+        el.style.transform = "";
+      });
+    });
   }
 
   function renderSeat(box, seat, state, isBottom) {
@@ -1186,11 +1215,11 @@ import * as PIXI from "./vendor/pixi.min.mjs";
       const riichiSet = new Set((state.actions && state.actions.riichiTiles) || []);
       seat.hand.forEach((t) => {
         const clickable = canDiscard && (!mjRiichiMode || riichiSet.has(t.id));
-        hand.appendChild(tileEl(t, isBottom ? "hand" : "small", clickable ? { click: () => onDiscardTile(t.id) } : {}));
+        hand.appendChild(tileEl(t, isBottom ? "hand" : "small", { id: t.id, ...(clickable ? { click: () => onDiscardTile(t.id) } : {}) }));
       });
       if (seat.drawn) {
         const clickable = canDiscard && (!mjRiichiMode || riichiSet.has(seat.drawn.id));
-        hand.appendChild(tileEl(seat.drawn, isBottom ? "hand" : "small", { extra: "drawn", ...(clickable ? { click: () => onDiscardTile(seat.drawn.id) } : {}) }));
+        hand.appendChild(tileEl(seat.drawn, isBottom ? "hand" : "small", { extra: "drawn", id: seat.drawn.id, ...(clickable ? { click: () => onDiscardTile(seat.drawn.id) } : {}) }));
       }
     } else {
       for (let i = 0; i < seat.handCount; i++) hand.appendChild(backEl("small"));
@@ -1289,6 +1318,77 @@ import * as PIXI from "./vendor/pixi.min.mjs";
     });
   }
 
+  // ---- mahjong reference: 役一覧 + 点数表 ----
+  // Score values are generated from the same formulas the server engine uses,
+  // so the table always matches actual scoring.
+  function mjBasePoints(han, fu) {
+    if (han >= 13) return 8000; if (han >= 11) return 6000; if (han >= 8) return 4000;
+    if (han >= 6) return 3000; if (han >= 5) return 2000;
+    return Math.min(fu * Math.pow(2, 2 + han), 2000);
+  }
+  const ceil100 = (x) => Math.ceil(x / 100) * 100;
+  const ndRon = (h, f) => ceil100(mjBasePoints(h, f) * 4);
+  const dRon = (h, f) => ceil100(mjBasePoints(h, f) * 6);
+  const ndTsumo = (h, f) => `${ceil100(mjBasePoints(h, f))}/${ceil100(mjBasePoints(h, f) * 2)}`;
+  const dTsumo = (h, f) => `${ceil100(mjBasePoints(h, f) * 2)} all`;
+
+  const YAKU_REF = [
+    ["1翻", [["立直 (リーチ)", 1], ["一発", 1], ["門前清自摸和 (ツモ)", 1], ["平和", 1], ["断幺九 (タンヤオ)", 1],
+      ["一盃口", 1], ["役牌 白/發/中", 1], ["場風", 1], ["自風", 1], ["海底摸月", 1], ["河底撈魚", 1], ["嶺上開花", 1], ["槍槓", 1]]],
+    ["2翻", [["ダブル立直", 2], ["三色同順", "2/喰1"], ["一気通貫", "2/喰1"], ["混全帯幺九 (チャンタ)", "2/喰1"],
+      ["七対子", 2], ["対々和", 2], ["三暗刻", 2], ["三色同刻", 2], ["三槓子", 2], ["混老頭", 2], ["小三元", 2]]],
+    ["3翻", [["混一色 (ホンイツ)", "3/喰2"], ["純全帯幺九 (純チャン)", "3/喰2"], ["二盃口", 3]]],
+    ["6翻", [["清一色 (チンイツ)", "6/喰5"]]],
+    ["役満", [["国士無双", "役満"], ["四暗刻", "役満"], ["大三元", "役満"], ["字一色", "役満"], ["緑一色", "役満"],
+      ["清老頭", "役満"], ["九蓮宝燈", "役満"], ["四槓子", "役満"], ["小四喜", "役満"], ["大四喜", "W役満"],
+      ["四暗刻単騎", "W役満"], ["天和/地和", "役満"]]],
+    ["ドラ (役ではない)", [["ドラ", 1], ["裏ドラ (リーチ時)", 1], ["赤ドラ (赤5)", 1]]],
+  ];
+
+  let mjRefBuilt = false;
+  function buildMjReference() {
+    if (mjRefBuilt) return;
+    mjRefBuilt = true;
+    // yaku list
+    const yakuBox = $("#mj-ref-yaku");
+    yakuBox.innerHTML = YAKU_REF.map(([group, items]) =>
+      `<div class="mj-ref-group"><h4>${group}</h4><div class="mj-ref-list">` +
+      items.map(([name, han]) => `<div>${escapeHtml(name)} <span class="han">${han}${typeof han === "number" ? "翻" : ""}</span></div>`).join("") +
+      `</div></div>`
+    ).join("") + `<p class="mj-ref-note">「喰n」=鳴いた場合の翻数(食い下がり)。役満は複合で W(ダブル)。ドラは役がある時のみ加算。</p>`;
+
+    // score tables
+    const fus = [30, 40, 50, 60];
+    const hans = [1, 2, 3, 4];
+    const tableRon = (title, fn) => {
+      let h = `<table class="mj-score-table"><caption>${title}</caption><tr><th>符\\翻</th>` + hans.map((x) => `<th>${x}翻</th>`).join("") + `</tr>`;
+      for (const f of fus) h += `<tr><td>${f}符</td>` + hans.map((x) => `<td>${fn(x, f)}</td>`).join("") + `</tr>`;
+      h += `<tr class="mangan"><td>満貫〜</td><td colspan="4">${fn(5, 30)}(満貫) / ${fn(6, 30)}(跳満) / ${fn(8, 30)}(倍満) / ${fn(11, 30)}(三倍満) / ${fn(13, 30)}(役満)</td></tr></table>`;
+      return h;
+    };
+    const scoreBox = $("#mj-ref-score");
+    scoreBox.innerHTML =
+      tableRon("子(非親) ロン 和了点", ndRon) +
+      tableRon("子(非親) ツモ 和了点 (子/親の支払い)", ndTsumo) +
+      tableRon("親 ロン 和了点", dRon) +
+      tableRon("親 ツモ 和了点 (全員の支払い)", dTsumo) +
+      `<p class="mj-ref-note">20符=平和ツモ、25符=七対子。ロンは満貫未満でも符×2^(2+翻)、満貫で頭打ち。本場は1本場ごとにロン+300点/ツモ各+100点。</p>`;
+  }
+
+  function initMjReference() {
+    const modal = $("#mj-ref-modal");
+    $("#mj-ref-btn").addEventListener("click", () => { buildMjReference(); modal.classList.remove("hidden"); });
+    $("#mj-ref-close").addEventListener("click", () => modal.classList.add("hidden"));
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.add("hidden"); });
+    document.querySelectorAll(".mj-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".mj-tab").forEach((t) => t.classList.toggle("active", t === tab));
+        $("#mj-ref-yaku").classList.toggle("hidden", tab.dataset.tab !== "yaku");
+        $("#mj-ref-score").classList.toggle("hidden", tab.dataset.tab !== "score");
+      });
+    });
+  }
+
   // ---- renderer lifecycle ----
   let g1r = null, g2r = null;
   function ensureG1() { if (!g1r) { g1r = new G1Renderer($("#g1-canvas")); g1r.init(); } }
@@ -1307,6 +1407,7 @@ import * as PIXI from "./vendor/pixi.min.mjs";
 
   // ---- boot ----
   showView("lobby");
+  initMjReference();
   connect();
   requestAnimationFrame(loop);
 })();

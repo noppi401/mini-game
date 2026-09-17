@@ -147,3 +147,32 @@ canvas {
 .mj-score-big { font-size:20px; color:#ffd166; font-weight:bold; }
 .mj-deltas { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; font-size:13px; }
 .mj-deltas .up { color:#5ad469; } .mj-deltas .down { color:#ff6b6b; }
+
+/* ===== Mahjong reference (役一覧 / 点数表) ===== */
+.mj-ref-btn { cursor:pointer; background:#3a4560; color:#fff; }
+.mj-ref-btn:hover { background:#4a5580; }
+.modal {
+  position:fixed; inset:0; background:rgba(6,9,16,0.72); z-index:50;
+  display:flex; align-items:flex-start; justify-content:center; padding:20px 12px; overflow-y:auto;
+}
+.modal.hidden { display:none; }
+.modal-box {
+  background:#161b26; border:1px solid #2a3346; border-radius:12px;
+  width:100%; max-width:620px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,0.5);
+}
+.modal-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
+.modal-tabs { display:flex; gap:6px; }
+.mj-tab { background:#232b3d; color:#cdd6ea; padding:8px 14px; }
+.mj-tab.active { background:#4f7cff; color:#fff; }
+.modal-body.hidden { display:none; }
+.mj-ref-group { margin-bottom:12px; }
+.mj-ref-group h4 { margin:0 0 6px; font-size:14px; color:#ffd166; border-bottom:1px solid #2a3346; padding-bottom:3px; }
+.mj-ref-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:2px 12px; font-size:13px; }
+.mj-ref-list .han { color:#9fe0c0; font-variant-numeric:tabular-nums; }
+.mj-ref-note { color:#9aa4c0; font-size:12px; margin-top:6px; }
+.mj-score-table { width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:14px; }
+.mj-score-table caption { text-align:left; color:#ffd166; font-weight:bold; margin-bottom:4px; }
+.mj-score-table th, .mj-score-table td { border:1px solid #2a3346; padding:4px 6px; text-align:center; }
+.mj-score-table th { background:#232b3d; color:#cdd6ea; }
+.mj-score-table td:first-child { background:#1c2233; color:#9fe0c0; font-weight:bold; }
+.mj-score-table .mangan td { color:#ffcf6b; }

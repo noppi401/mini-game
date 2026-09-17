@@ -94,6 +94,7 @@
       <span id="mj-wall" class="mj-chip"></span>
       <span id="mj-dora" class="mj-chip"></span>
       <span id="mj-riichi" class="mj-chip"></span>
+      <button id="mj-ref-btn" class="mj-chip mj-ref-btn">📖 役・点数</button>
     </div>
     <div id="mj-table">
       <div id="mj-center"></div>
@@ -113,6 +114,20 @@
     <button id="back3-btn" style="display:none;">選択画面へ戻る</button>
     <p id="back3-wait" class="sub">ホストの操作を待っています…</p>
   </section>
+
+  <div id="mj-ref-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div class="modal-tabs">
+          <button class="mj-tab active" data-tab="yaku">役一覧</button>
+          <button class="mj-tab" data-tab="score">点数表</button>
+        </div>
+        <button id="mj-ref-close" class="ghost">✕ 閉じる</button>
+      </div>
+      <div id="mj-ref-yaku" class="modal-body"></div>
+      <div id="mj-ref-score" class="modal-body hidden"></div>
+    </div>
+  </div>
 
 </div>
 <script type="module" src="js/main.js"></script>
